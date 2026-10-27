@@ -283,6 +283,19 @@
             </div>
           </div>
 
+          <div class="bg-slate-950 border border-slate-800 rounded-lg p-3">
+            <div class="flex items-center justify-between gap-3 mb-3">
+              <button onclick="changeWpCalendarMonth(-1)" aria-label="আগের মাস" class="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 border border-slate-700 rounded text-slate-200">‹</button>
+              <strong id="wp-calendar-month" class="text-sm text-white" aria-live="polite">প্রকাশের ক্যালেন্ডার</strong>
+              <button onclick="changeWpCalendarMonth(1)" aria-label="পরের মাস" class="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 border border-slate-700 rounded text-slate-200">›</button>
+            </div>
+            <div class="grid grid-cols-7 gap-1 text-center text-[10px] text-slate-500 mb-1">
+              <span>রবি</span><span>সোম</span><span>মঙ্গল</span><span>বুধ</span><span>বৃহস্পতি</span><span>শুক্র</span><span>শনি</span>
+            </div>
+            <div id="wp-publish-calendar" class="grid grid-cols-7 gap-1" role="grid" aria-label="সংবাদ প্রকাশের তারিখ"></div>
+            <p id="wp-calendar-status" class="text-[10px] text-slate-500 mt-2">প্রকাশের তারিখগুলো লোড হচ্ছে...</p>
+          </div>
+
           <div id="wp-posts-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <div class="col-span-full py-10 text-center text-slate-400 text-xs flex flex-col items-center gap-2">
               <i class="fa-solid fa-spinner animate-spin text-2xl text-blue-500"></i>
@@ -1637,6 +1650,10 @@ let defaultAds = [
 
       // Connect to WordPress (dnbangla.com.bd)
       syncWordPress(false);
+      const dhakaDateParts = getDhakaDateInputValue().split('-').map(Number);
+      wpCalendarYear = dhakaDateParts[0];
+      wpCalendarMonth = dhakaDateParts[1] - 1;
+      loadWpCalendarMonth(wpCalendarYear, wpCalendarMonth);
       // Auto-polling every 45 seconds for newly published articles
       if (wpSyncTimer) clearInterval(wpSyncTimer);
       wpSyncTimer = setInterval(() => {
@@ -3254,11 +3271,17 @@ let defaultAds = [
     let wpSyncTimer = null;
     let lastSeenWpPostId = localStorage.getItem('dnbangla_last_seen_post_id') || null;
     const WP_FEED_PAGE_SIZE = 6;
+    const WP_CALENDAR_MONTHS = ['জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন', 'জুলাই', 'আগস্ট', 'সেপ্টেম্বর', 'অক্টোবর', 'নভেম্বর', 'ডিসেম্বর'];
     const POST_AD_CYCLE_STORAGE_KEY = 'dnbangla_post_ad_cycle_v1';
     let wpFeedPage = 1;
     let wpFeedTotalPages = 1;
     let wpFeedDate = '';
+    let wpCalendarYear = 0;
+    let wpCalendarMonth = 0;
+    let wpCalendarRequestToken = 0;
+    let wpCalendarPostCounts = {};
     let wpSyncInProgress = false;
+    let wpSyncPending = false;
     let postAdCycle = loadPostAdCycle();
 
     function loadPostAdCycle() {
@@ -3365,7 +3388,8 @@ let defaultAds = [
           featuredImage: post._embedded?.['wp:featuredmedia']?.[0]?.source_url || '',
           category: post._embedded?.['wp:term']?.[0]?.[0]?.name || 'সংবাদ',
           date: post.date || '',
-          bengaliDate: formatToBengaliDate(post.date),
+          dateGmt: post.date_gmt || '',
+          bengaliDate: formatToBengaliDate(post.date_gmt ? `${post.date_gmt}Z` : post.date),
           link: post.link || ''
         })),
         total: Number(response.headers.get('X-WP-Total') || 0),
@@ -3373,8 +3397,102 @@ let defaultAds = [
       };
     }
 
+    async function requestWordPressCalendarPage(year, month, page) {
+      const firstDay = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+      const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+      const lastDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+      const endpoint = new URL('https://www.dnbangla.com.bd/wp-json/wp/v2/posts');
+      endpoint.searchParams.set('per_page', '100');
+      endpoint.searchParams.set('page', String(page));
+      endpoint.searchParams.set('after', `${firstDay}T00:00:00+06:00`);
+      endpoint.searchParams.set('before', `${lastDate}T23:59:59+06:00`);
+      const response = await fetch(endpoint, { mode: 'cors', signal: AbortSignal.timeout(15000) });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const posts = await response.json();
+      return {
+        posts: Array.isArray(posts) ? posts : [],
+        totalPages: Number(response.headers.get('X-WP-TotalPages') || 1)
+      };
+    }
+
+    async function loadWpCalendarMonth(year, month) {
+      const token = ++wpCalendarRequestToken;
+      wpCalendarYear = year;
+      wpCalendarMonth = month;
+      wpCalendarPostCounts = {};
+      renderWpCalendar();
+      const status = document.getElementById('wp-calendar-status');
+      if (status) status.textContent = 'প্রকাশের তারিখগুলো লোড হচ্ছে...';
+      try {
+        const firstPage = await requestWordPressCalendarPage(year, month, 1);
+        const pages = [firstPage.posts];
+        for (let start = 2; start <= firstPage.totalPages; start += 4) {
+          const batch = [];
+          for (let page = start; page < start + 4 && page <= firstPage.totalPages; page += 1) {
+            batch.push(requestWordPressCalendarPage(year, month, page));
+          }
+          const results = await Promise.all(batch);
+          pages.push(...results.map(result => result.posts));
+          if (token !== wpCalendarRequestToken) return;
+        }
+        if (token !== wpCalendarRequestToken) return;
+        pages.flat().forEach(post => {
+          const date = post.date_gmt ? new Date(`${post.date_gmt}Z`) : new Date(post.date);
+          const day = getDhakaDateInputValue(date);
+          wpCalendarPostCounts[day] = (wpCalendarPostCounts[day] || 0) + 1;
+        });
+        renderWpCalendar();
+        if (status) {
+          const total = Object.values(wpCalendarPostCounts).reduce((sum, count) => sum + count, 0);
+          status.textContent = total
+            ? `${toBengaliNumber(Object.keys(wpCalendarPostCounts).length)} দিনে ${toBengaliNumber(total)}টি সংবাদ প্রকাশিত`
+            : 'এই মাসে কোনো সংবাদ পাওয়া যায়নি।';
+        }
+      } catch (error) {
+        if (token !== wpCalendarRequestToken) return;
+        if (status) status.textContent = 'তারিখের তালিকা লোড হয়নি। আবার চেষ্টা করুন।';
+      }
+    }
+
+    function renderWpCalendar() {
+      const monthLabel = document.getElementById('wp-calendar-month');
+      const grid = document.getElementById('wp-publish-calendar');
+      if (!monthLabel || !grid) return;
+      monthLabel.textContent = `${WP_CALENDAR_MONTHS[wpCalendarMonth]} ${toBengaliNumber(wpCalendarYear)}`;
+      const firstWeekday = new Date(Date.UTC(wpCalendarYear, wpCalendarMonth, 1)).getUTCDay();
+      const daysInMonth = new Date(Date.UTC(wpCalendarYear, wpCalendarMonth + 1, 0)).getUTCDate();
+      const cells = Array.from({ length: firstWeekday }, () => '<span aria-hidden="true"></span>');
+      for (let day = 1; day <= daysInMonth; day += 1) {
+        const date = `${wpCalendarYear}-${String(wpCalendarMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const count = wpCalendarPostCounts[date] || 0;
+        const selected = wpFeedDate === date;
+        const classes = selected
+          ? 'bg-blue-600 border-blue-400 text-white'
+          : count
+            ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-200 hover:bg-emerald-500/20'
+            : 'bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-800';
+        const label = `${formatToBengaliDate(date)}${count ? `, ${toBengaliNumber(count)}টি সংবাদ` : ', কোনো সংবাদ নেই'}`;
+        cells.push(`<button type="button" role="gridcell" aria-label="${escapeHtml(label)}" aria-pressed="${selected}" onclick="selectWpCalendarDate('${date}')" class="min-h-10 border rounded text-[11px] ${classes}"><span class="block">${toBengaliNumber(day)}</span>${count ? `<span class="block text-[8px] text-emerald-300">● ${toBengaliNumber(count)}</span>` : '<span class="block text-[8px] opacity-0">●</span>'}</button>`);
+      }
+      grid.innerHTML = cells.join('');
+    }
+
+    function changeWpCalendarMonth(delta) {
+      const next = new Date(Date.UTC(wpCalendarYear, wpCalendarMonth + delta, 1));
+      loadWpCalendarMonth(next.getUTCFullYear(), next.getUTCMonth());
+    }
+
+    function selectWpCalendarDate(date) {
+      const input = document.getElementById('wp-feed-date');
+      if (input) input.value = date;
+      handleWpFeedDateChange(date);
+    }
+
     async function syncWordPress(isManual = false) {
-      if (wpSyncInProgress) return;
+      if (wpSyncInProgress) {
+        wpSyncPending = true;
+        return;
+      }
       wpSyncInProgress = true;
       const refreshIcon = document.getElementById('wp-refresh-icon');
       const syncIcon = document.getElementById('sync-icon');
@@ -3456,6 +3574,10 @@ let defaultAds = [
         wpSyncInProgress = false;
         if (refreshIcon) refreshIcon.classList.remove('animate-spin');
         if (syncIcon) syncIcon.classList.remove('animate-spin');
+        if (wpSyncPending) {
+          wpSyncPending = false;
+          queueMicrotask(() => syncWordPress(false));
+        }
       }
     }
 
@@ -3472,6 +3594,16 @@ let defaultAds = [
     function handleWpFeedDateChange(value) {
       wpFeedDate = value || '';
       wpFeedPage = 1;
+      if (wpFeedDate) {
+        const [year, month] = wpFeedDate.split('-').map(Number);
+        if (year !== wpCalendarYear || month - 1 !== wpCalendarMonth) {
+          loadWpCalendarMonth(year, month - 1);
+        } else {
+          renderWpCalendar();
+        }
+      } else {
+        renderWpCalendar();
+      }
       syncWordPress(true);
     }
 
@@ -3599,7 +3731,10 @@ let defaultAds = [
       if (!post) return;
       selectAdForPost(post);
       document.getElementById('input-headline').value = post.cleanTitle;
-      if (post.date) document.getElementById('input-date-val').value = getDhakaDateInputValue(new Date(post.date));
+      if (post.dateGmt || post.date) {
+        const publishedAt = post.dateGmt ? new Date(`${post.dateGmt}Z`) : new Date(post.date);
+        document.getElementById('input-date-val').value = getDhakaDateInputValue(publishedAt);
+      }
       document.getElementById('link-website').value = 'DNBangla.com.bd';
 
       const select = document.getElementById('wp-post-select');
