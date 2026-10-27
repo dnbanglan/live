@@ -363,7 +363,7 @@
                     <span class="ml-2 text-[10px] text-slate-400 font-medium">অটো তারিখ</span>
                   </label>
                 </div>
-                <input type="text" id="input-date-val" oninput="drawCanvas()" class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-1.5 text-xs text-slate-200">
+                <input type="date" id="input-date-val" oninput="drawCanvas()" aria-label="ফটোকার্ডের তারিখ নির্বাচন" class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-1.5 text-xs text-slate-200">
               </div>
 
               <!-- "বিস্তারিত কমেন্টে" রাউন্ড ব্যাজ (১০৯০px - ১১৬৫px = ৭৫px) -->
@@ -1774,15 +1774,41 @@ let defaultAds = [
     function handleAutoDateToggle() {
       const isAuto = document.getElementById('toggle-auto-date').checked;
       const dateInput = document.getElementById('input-date-val');
-      if(isAuto) {
-        const now = new Date();
-        const options = { year: 'numeric', month: 'long', day: 'numeric' };
-        dateInput.value = now.toLocaleDateString('bn-BD', options);
-        dateInput.disabled = true;
-      } else {
-        dateInput.disabled = false;
-      }
+      if (isAuto) dateInput.value = getDhakaDateInputValue();
+      dateInput.disabled = isAuto;
       drawCanvas();
+    }
+
+    function getDhakaDateInputValue(date = new Date()) {
+      const parts = new Intl.DateTimeFormat('en-CA', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        timeZone: 'Asia/Dhaka'
+      }).formatToParts(date);
+      const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
+      return `${values.year}-${values.month}-${values.day}`;
+    }
+
+    function formatToBengaliDate(dateValue) {
+      if (!dateValue) return '';
+      let date;
+      if (typeof dateValue === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+        const [year, month, day] = dateValue.split('-').map(Number);
+        date = new Date(Date.UTC(year, month - 1, day, 6));
+      } else {
+        date = new Date(dateValue);
+      }
+      if (Number.isNaN(date.getTime())) return '';
+      return new Intl.DateTimeFormat('bn-BD', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+        timeZone: 'Asia/Dhaka'
+      }).formatToParts(date)
+        .filter(part => ['day', 'month', 'year'].includes(part.type))
+        .map(part => part.value)
+        .join(' ');
     }
 
     function handleBgUpload(e) {
@@ -2059,7 +2085,7 @@ let defaultAds = [
       ctx.fillStyle = topTextColor;
       ctx.font = '600 38px "Hind Siliguri", sans-serif';
       ctx.textAlign = 'right';
-      ctx.fillText(document.getElementById('input-date-val').value, width - 60, 55);
+      ctx.fillText(formatToBengaliDate(document.getElementById('input-date-val').value), width - 60, 55);
 
       // 2. FEATURE PHOTO AREA (From 80px to 1165px)
       const photoY = 80;
@@ -2435,12 +2461,7 @@ let defaultAds = [
       ctx.fillStyle = document.getElementById('picker-top-text').value;
       ctx.font = '600 38px "Hind Siliguri", sans-serif';
       ctx.textAlign = 'right';
-      const today = new Date().toLocaleDateString('bn-BD', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        timeZone: 'Asia/Dhaka'
-      });
+      const today = formatToBengaliDate(new Date());
       ctx.fillText(today, width - 60, 55, 700);
 
       // Keep the existing small category treatment and placement unchanged.
@@ -3237,21 +3258,6 @@ let defaultAds = [
         .replace(/&nbsp;/g, ' ');
     }
 
-    function formatToBengaliDate(isoDateStr) {
-      if (!isoDateStr) return '';
-      try {
-        const d = new Date(isoDateStr);
-        if (isNaN(d.getTime())) return '';
-        return d.toLocaleDateString('bn-BD', {
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric'
-        });
-      } catch(e) {
-        return '';
-      }
-    }
-
     function toBengaliNumber(num) {
       const bnDigits = ['০', '১', '২', '৩', '৪', '৫', '৬', '৭', '৮', '৯'];
       return String(num).replace(/[0-9]/g, w => bnDigits[+w]);
@@ -3447,9 +3453,7 @@ let defaultAds = [
     function loadPostIntoCanvas(post, notify = true) {
       if (!post) return;
       document.getElementById('input-headline').value = post.cleanTitle;
-      if (post.bengaliDate) {
-        document.getElementById('input-date-val').value = post.bengaliDate;
-      }
+      if (post.date) document.getElementById('input-date-val').value = getDhakaDateInputValue(new Date(post.date));
       document.getElementById('link-website').value = 'DNBangla.com.bd';
 
       const select = document.getElementById('wp-post-select');
