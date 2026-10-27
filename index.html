@@ -263,11 +263,23 @@
             </div>
             <div class="flex items-center gap-2 text-xs">
               <span id="wp-feed-count" class="text-slate-400 bg-slate-950 px-2.5 py-1 rounded border border-slate-800">
-                সিঙ্কড পোস্ট: লোড হচ্ছে...
+                সংবাদ লোড হচ্ছে...
               </span>
               <span id="wp-last-sync-time" class="text-slate-400 bg-slate-950 px-2.5 py-1 rounded border border-slate-800">
-                সর্বশেষ: সক্রিয়
+                সর্বশেষ সিঙ্ক: —
               </span>
+            </div>
+          </div>
+
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <label class="flex items-center gap-2 text-xs text-slate-300">
+              <span>প্রকাশের তারিখ</span>
+              <input id="wp-feed-date" type="date" class="bg-slate-950 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-white">
+            </label>
+            <div class="flex items-center gap-2">
+              <button id="wp-feed-prev" onclick="navigateWpFeed(-1)" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-xs text-slate-200 border border-slate-700 rounded" disabled>পূর্ববর্তী ৬টি</button>
+              <span id="wp-feed-page" class="text-xs text-slate-400 min-w-20 text-center">পৃষ্ঠা —</span>
+              <button id="wp-feed-next" onclick="navigateWpFeed(1)" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-xs text-slate-200 border border-slate-700 rounded" disabled>পরবর্তী ৬টি</button>
             </div>
           </div>
 
@@ -1614,6 +1626,10 @@ let defaultAds = [
       preloadAdImages();
       handleAutoDateToggle();
       updateTextTriggerColorControls();
+      const feedDateInput = document.getElementById('wp-feed-date');
+      if (feedDateInput) {
+        feedDateInput.addEventListener('change', event => handleWpFeedDateChange(event.target.value));
+      }
       initStaffModule();
       loadSavedApiSettings();
       drawCanvas();
@@ -3237,7 +3253,65 @@ let defaultAds = [
     let isWpAutoSyncEnabled = true;
     let wpSyncTimer = null;
     let lastSeenWpPostId = localStorage.getItem('dnbangla_last_seen_post_id') || null;
-    let todayAutoCardCount = parseInt(localStorage.getItem('dnbangla_today_autocard_count') || '1', 10);
+    const WP_FEED_PAGE_SIZE = 6;
+    const POST_AD_CYCLE_STORAGE_KEY = 'dnbangla_post_ad_cycle_v1';
+    let wpFeedPage = 1;
+    let wpFeedTotalPages = 1;
+    let wpFeedDate = '';
+    let wpSyncInProgress = false;
+    let postAdCycle = loadPostAdCycle();
+
+    function loadPostAdCycle() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(POST_AD_CYCLE_STORAGE_KEY) || '{}');
+        return {
+          nextIndex: Number.isInteger(saved.nextIndex) && saved.nextIndex >= 0 ? saved.nextIndex : 0,
+          assignments: saved.assignments && typeof saved.assignments === 'object' ? saved.assignments : {}
+        };
+      } catch (error) {
+        return { nextIndex: 0, assignments: {} };
+      }
+    }
+
+    function savePostAdCycle() {
+      try {
+        localStorage.setItem(POST_AD_CYCLE_STORAGE_KEY, JSON.stringify(postAdCycle));
+      } catch (error) {
+        console.warn('Post ad cycle could not be saved.', error);
+      }
+    }
+
+    function assignAdToPost(post) {
+      if (!post || !adBanners.length) return -1;
+      const postId = String(post.id);
+      let adId = postAdCycle.assignments[postId];
+      let index = adId ? adBanners.findIndex(ad => String(ad.id) === String(adId)) : -1;
+      if (index < 0) {
+        index = postAdCycle.nextIndex % adBanners.length;
+        adId = adBanners[index].id;
+        postAdCycle.assignments[postId] = adId;
+        postAdCycle.nextIndex += 1;
+        savePostAdCycle();
+      }
+      currentAdIndex = index;
+      const select = document.getElementById('ad-banner-select');
+      if (select) select.value = String(index);
+      const name = document.getElementById('topbar-ad-name');
+      if (name) name.textContent = adBanners[index].name;
+      return index;
+    }
+
+    function selectAdForPost(post) {
+      const adId = postAdCycle.assignments[String(post?.id)];
+      const index = adBanners.findIndex(ad => String(ad.id) === String(adId));
+      if (index >= 0) {
+        currentAdIndex = index;
+        const select = document.getElementById('ad-banner-select');
+        if (select) select.value = String(index);
+        const name = document.getElementById('topbar-ad-name');
+        if (name) name.textContent = adBanners[index].name;
+      }
+    }
 
     function decodeHtmlEntities(str) {
       if (!str) return '';
@@ -3263,96 +3337,153 @@ let defaultAds = [
       return String(num).replace(/[0-9]/g, w => bnDigits[+w]);
     }
 
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, character => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[character]));
+    }
+
+    async function requestWordPressPosts(page = 1, perPage = WP_FEED_PAGE_SIZE, date = '') {
+      const endpoint = new URL('https://www.dnbangla.com.bd/wp-json/wp/v2/posts');
+      endpoint.searchParams.set('_embed', 'true');
+      endpoint.searchParams.set('per_page', String(perPage));
+      endpoint.searchParams.set('page', String(page));
+      endpoint.searchParams.set('orderby', 'date');
+      endpoint.searchParams.set('order', 'desc');
+      if (date) {
+        endpoint.searchParams.set('after', `${date}T00:00:00+06:00`);
+        endpoint.searchParams.set('before', `${date}T23:59:59+06:00`);
+      }
+      const response = await fetch(endpoint, { mode: 'cors', signal: AbortSignal.timeout(15000) });
+      if (!response.ok) throw new Error(`WordPress API HTTP ${response.status}`);
+      const posts = await response.json();
+      if (!Array.isArray(posts)) throw new Error('WordPress API returned an invalid post list.');
+      return {
+        items: posts.map(post => ({
+          id: post.id,
+          cleanTitle: decodeHtmlEntities(post.title?.rendered || ''),
+          featuredImage: post._embedded?.['wp:featuredmedia']?.[0]?.source_url || '',
+          category: post._embedded?.['wp:term']?.[0]?.[0]?.name || 'সংবাদ',
+          date: post.date || '',
+          bengaliDate: formatToBengaliDate(post.date),
+          link: post.link || ''
+        })),
+        total: Number(response.headers.get('X-WP-Total') || 0),
+        totalPages: Number(response.headers.get('X-WP-TotalPages') || 1)
+      };
+    }
+
     async function syncWordPress(isManual = false) {
+      if (wpSyncInProgress) return;
+      wpSyncInProgress = true;
       const refreshIcon = document.getElementById('wp-refresh-icon');
       const syncIcon = document.getElementById('sync-icon');
       if (refreshIcon) refreshIcon.classList.add('animate-spin');
       if (syncIcon) syncIcon.classList.add('animate-spin');
-
-      const proxyEndpoint = '/wp-proxy/wp-json/wp/v2/posts?_embed=true&per_page=12';
-      const directEndpoint = 'https://www.dnbangla.com.bd/wp-json/wp/v2/posts?_embed=true&per_page=12';
-
-      let rawPosts = null;
       try {
-        const res = await fetch(proxyEndpoint);
-        if (res.ok) {
-          rawPosts = await res.json();
+        const [feed, latest] = await Promise.all([
+          requestWordPressPosts(wpFeedPage, WP_FEED_PAGE_SIZE, wpFeedDate),
+          requestWordPressPosts(1, 100)
+        ]);
+        wpPostsList = feed.items;
+        if (currentWpIndex >= wpPostsList.length) currentWpIndex = 0;
+        wpFeedTotalPages = Math.max(1, feed.totalPages);
+        if (wpFeedPage > wpFeedTotalPages) {
+          wpFeedPage = wpFeedTotalPages;
+          const lastPage = await requestWordPressPosts(wpFeedPage, WP_FEED_PAGE_SIZE, wpFeedDate);
+          wpPostsList = lastPage.items;
         }
-      } catch(e) {
-        console.warn('Proxy fetch failed, attempting direct fetch:', e);
-      }
+        renderWpDropdown();
+        renderWpFeed();
+        updateWpFeedControls(feed.total, wpFeedTotalPages);
+        const connectionStatus = document.getElementById('wp-connection-status');
+        if (connectionStatus) {
+          connectionStatus.className = 'inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 rounded-full text-[11px] font-semibold';
+          connectionStatus.textContent = 'WordPress feed connected · read-only';
+        }
+        const wpBadge = document.getElementById('wp-badge-status');
+        if (wpBadge) {
+          wpBadge.className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 flex items-center gap-1';
+          wpBadge.textContent = 'পাবলিক ফিড সক্রিয় · read-only';
+        }
 
-      if (!rawPosts) {
-        try {
-          const res = await fetch(directEndpoint);
-          if (res.ok) {
-            rawPosts = await res.json();
+        const wpPostsEl = document.getElementById('overview-wp-posts');
+        if (wpPostsEl) wpPostsEl.textContent = toBengaliNumber(latest.total) + ' টি';
+        const lastSyncEl = document.getElementById('wp-last-sync-time');
+        if (lastSyncEl) lastSyncEl.textContent = 'সর্বশেষ সিঙ্ক: ' + new Date().toLocaleTimeString('bn-BD');
+
+        const newest = latest.items[0];
+        if (newest) {
+          if (!lastSeenWpPostId) {
+            assignAdToPost(newest);
+            lastSeenWpPostId = String(newest.id);
+            localStorage.setItem('dnbangla_last_seen_post_id', lastSeenWpPostId);
+            if (isWpAutoSyncEnabled) loadPostIntoCanvas(newest, false);
+          } else if (String(newest.id) !== String(lastSeenWpPostId)) {
+            const previousIndex = latest.items.findIndex(post => String(post.id) === String(lastSeenWpPostId));
+            const unseenPosts = (previousIndex >= 0 ? latest.items.slice(0, previousIndex) : latest.items).reverse();
+            unseenPosts.forEach(post => assignAdToPost(post));
+            lastSeenWpPostId = String(newest.id);
+            localStorage.setItem('dnbangla_last_seen_post_id', lastSeenWpPostId);
+            logEvent('WordPress feed: ' + unseenPosts.length + ' নতুন পোস্টে ধারাবাহিক বিজ্ঞাপন বরাদ্দ হয়েছে।');
+            if (isWpAutoSyncEnabled) {
+              loadPostIntoCanvas(newest, false);
+              showToast('নতুন সংবাদ পাওয়া গেছে; preview-তে লোড হয়েছে।', 'info');
+            }
           }
-        } catch(e) {
-          console.error('Direct WordPress fetch error:', e);
         }
-      }
-
-      if (refreshIcon) refreshIcon.classList.remove('animate-spin');
-      if (syncIcon) syncIcon.classList.remove('animate-spin');
-
-      if (!rawPosts || !Array.isArray(rawPosts) || rawPosts.length === 0) {
         if (isManual) {
-          showToast('ওয়ার্ডপ্রেস পোস্ট লোড হতে সমস্যা হয়েছে। সংযোগ পুনরায় চেষ্টা করুন।', 'error');
+          showToast(wpFeedDate
+            ? `${formatToBengaliDate(wpFeedDate)} তারিখের ${toBengaliNumber(feed.total)}টি সংবাদ পাওয়া গেছে।`
+            : `${toBengaliNumber(feed.total)}টি WordPress সংবাদ পাওয়া গেছে।`);
         }
-        return;
-      }
-
-      wpPostsList = rawPosts.map(p => {
-        const cleanTitle = decodeHtmlEntities(p.title?.rendered || '');
-        const featuredMedia = p._embedded?.['wp:featuredmedia']?.[0]?.source_url || '';
-        const category = p._embedded?.['wp:term']?.[0]?.[0]?.name || 'সংবাদ';
-        const bengaliDate = formatToBengaliDate(p.date);
-        return {
-          id: p.id,
-          cleanTitle,
-          featuredImage: featuredMedia,
-          category,
-          date: p.date,
-          bengaliDate,
-          link: p.link
-        };
-      });
-
-      renderWpDropdown();
-      renderWpFeed();
-
-      const wpPostsEl = document.getElementById('overview-wp-posts');
-      if (wpPostsEl) wpPostsEl.textContent = toBengaliNumber(wpPostsList.length) + ' টি';
-      const feedCountEl = document.getElementById('wp-feed-count');
-      if (feedCountEl) feedCountEl.textContent = 'সর্বশেষ ' + toBengaliNumber(wpPostsList.length) + 'টি পোস্ট সিঙ্কড';
-      const lastSyncEl = document.getElementById('wp-last-sync-time');
-      if (lastSyncEl) lastSyncEl.textContent = 'সর্বশেষ সিঙ্ক: ' + new Date().toLocaleTimeString('bn-BD');
-
-      // Check if new post published
-      const newest = wpPostsList[0];
-      if (newest) {
-        if (!lastSeenWpPostId) {
-          // First time initialization
-          lastSeenWpPostId = String(newest.id);
-          localStorage.setItem('dnbangla_last_seen_post_id', lastSeenWpPostId);
-          loadPostIntoCanvas(newest, false);
-          logEvent('WordPress Live Connected: Initialized with latest post ID #' + newest.id + ' "' + newest.cleanTitle + '"');
-        } else if (String(newest.id) !== String(lastSeenWpPostId)) {
-          // A new post published on WordPress!
-          lastSeenWpPostId = String(newest.id);
-          localStorage.setItem('dnbangla_last_seen_post_id', lastSeenWpPostId);
-          if (isWpAutoSyncEnabled) {
-            loadPostIntoCanvas(newest, false);
-            showToast('নতুন সংবাদ পাওয়া গেছে; preview-তে লোড হয়েছে। server-side card creation বা publishing নেই।', 'info');
-          }
-          logEvent('WordPress feed preview: detected post #' + newest.id + '. No card record or social post was created.');
+      } catch (error) {
+        console.error('WordPress feed request failed:', error);
+        const connectionStatus = document.getElementById('wp-connection-status');
+        if (connectionStatus) {
+          connectionStatus.className = 'inline-flex items-center gap-1.5 px-2.5 py-1 bg-red-500/10 text-red-300 border border-red-500/20 rounded-full text-[11px] font-semibold';
+          connectionStatus.textContent = 'WordPress feed unavailable';
         }
+        const wpBadge = document.getElementById('wp-badge-status');
+        if (wpBadge) {
+          wpBadge.className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-red-500/10 text-red-300 border border-red-500/30 flex items-center gap-1';
+          wpBadge.textContent = 'সংযোগ পাওয়া যায়নি';
+        }
+        if (isManual) showToast('WordPress সংবাদ আনা যায়নি। CORS/নেটওয়ার্ক সংযোগ পরীক্ষা করে আবার চেষ্টা করুন।', 'error');
+        const container = document.getElementById('wp-posts-grid');
+        if (container && !wpPostsList.length) container.innerHTML = '<div class="col-span-full py-8 text-center text-slate-400 text-xs">সংবাদ লোড হয়নি। সিঙ্ক বাটনে আবার চেষ্টা করুন।</div>';
+      } finally {
+        wpSyncInProgress = false;
+        if (refreshIcon) refreshIcon.classList.remove('animate-spin');
+        if (syncIcon) syncIcon.classList.remove('animate-spin');
       }
+    }
 
-      if (isManual) {
-        showToast('dnbangla.com.bd থেকে ' + toBengaliNumber(wpPostsList.length) + 'টি সাম্প্রতিক পোস্ট সফলভাবে সিঙ্ক হয়েছে!');
-      }
+    async function loadWpFeedPage(page = 1) {
+      if (wpSyncInProgress) return;
+      wpFeedPage = Math.max(1, Math.min(page, wpFeedTotalPages));
+      await syncWordPress(false);
+    }
+
+    function navigateWpFeed(delta) {
+      loadWpFeedPage(wpFeedPage + delta);
+    }
+
+    function handleWpFeedDateChange(value) {
+      wpFeedDate = value || '';
+      wpFeedPage = 1;
+      syncWordPress(true);
+    }
+
+    function updateWpFeedControls(total, totalPages) {
+      const count = document.getElementById('wp-feed-count');
+      const pageLabel = document.getElementById('wp-feed-page');
+      const previous = document.getElementById('wp-feed-prev');
+      const next = document.getElementById('wp-feed-next');
+      if (count) count.textContent = `${toBengaliNumber(total)}টি সংবাদ${wpFeedDate ? ` · ${formatToBengaliDate(wpFeedDate)}` : ''}`;
+      if (pageLabel) pageLabel.textContent = `পৃষ্ঠা ${toBengaliNumber(wpFeedPage)} / ${toBengaliNumber(totalPages)}`;
+      if (previous) previous.disabled = wpFeedPage <= 1;
+      if (next) next.disabled = wpFeedPage >= totalPages;
     }
 
     function renderWpDropdown() {
@@ -3375,12 +3506,17 @@ let defaultAds = [
       if (!container) return;
       container.innerHTML = '';
 
+      if (!wpPostsList.length) {
+        container.innerHTML = '<div class="col-span-full py-8 text-center text-slate-400 text-xs">এই তারিখে কোনো সংবাদ পাওয়া যায়নি।</div>';
+        return;
+      }
+
       wpPostsList.slice(0, 6).forEach((post, idx) => {
         const card = document.createElement('div');
         card.className = 'bg-slate-950 p-3.5 rounded-xl border border-slate-800 hover:border-blue-500/50 transition flex flex-col justify-between space-y-3';
 
         const thumbHtml = post.featuredImage
-          ? '<img src="' + post.featuredImage + '" alt="' + post.cleanTitle + '" class="w-full h-36 object-cover rounded-lg bg-slate-900" onerror="this.src=\'/ads/ad1.jpg\'">'
+          ? `<img src="${escapeHtml(safeWordPressUrl(post.featuredImage))}" alt="${escapeHtml(post.cleanTitle)}" class="w-full h-36 object-cover rounded-lg bg-slate-900" onerror="this.style.display='none'">`
           : '<div class="w-full h-36 bg-slate-900 rounded-lg flex items-center justify-center text-slate-500 text-xs"><i class="fa-solid fa-image text-xl mr-2"></i> নো ফিচার ছবি</div>';
 
         card.innerHTML = `
@@ -3388,14 +3524,14 @@ let defaultAds = [
             <div class="relative">
               ${thumbHtml}
               <span class="absolute top-2 left-2 bg-blue-600/90 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow backdrop-blur-sm">
-                #${idx + 1} • ${post.category}
+                #${toBengaliNumber((wpFeedPage - 1) * WP_FEED_PAGE_SIZE + idx + 1)} • ${escapeHtml(post.category)}
               </span>
               <span class="absolute bottom-2 right-2 bg-black/80 text-amber-300 text-[10px] font-mono px-2 py-0.5 rounded backdrop-blur-sm">
-                ${post.bengaliDate}
+                ${escapeHtml(post.bengaliDate)}
               </span>
             </div>
-            <h4 class="font-bold text-xs text-white line-clamp-2 leading-relaxed hover:text-blue-400 transition" title="${post.cleanTitle}">
-              ${post.cleanTitle}
+            <h4 class="font-bold text-xs text-white line-clamp-2 leading-relaxed hover:text-blue-400 transition" title="${escapeHtml(post.cleanTitle)}">
+              ${escapeHtml(post.cleanTitle)}
             </h4>
           </div>
           <div class="space-y-1.5 pt-2 border-t border-slate-800/80">
@@ -3406,7 +3542,7 @@ let defaultAds = [
               <button onclick="loadPostIntoTextTriggerByIndex(${idx})" class="flex-1 bg-slate-800 hover:bg-slate-700 text-amber-300 text-[10px] font-medium py-1 rounded transition flex items-center justify-center gap-1">
                 <i class="fa-solid fa-wand-magic-sparkles"></i> টিগার কার্ড
               </button>
-              <a href="${post.link}" target="_blank" class="px-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-medium py-1 rounded transition flex items-center justify-center gap-1">
+              <a href="${escapeHtml(safeWordPressUrl(post.link))}" target="_blank" rel="noopener noreferrer" class="px-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-medium py-1 rounded transition flex items-center justify-center gap-1">
                 <i class="fa-solid fa-arrow-up-right-from-square"></i>
               </a>
             </div>
@@ -3414,6 +3550,15 @@ let defaultAds = [
         `;
         container.appendChild(card);
       });
+    }
+
+    function safeWordPressUrl(value) {
+      try {
+        const url = new URL(value);
+        return ['https:', 'http:'].includes(url.protocol) ? url.href : '';
+      } catch (error) {
+        return '';
+      }
     }
 
     function loadPostByIndex(idx) {
@@ -3452,6 +3597,7 @@ let defaultAds = [
 
     function loadPostIntoCanvas(post, notify = true) {
       if (!post) return;
+      selectAdForPost(post);
       document.getElementById('input-headline').value = post.cleanTitle;
       if (post.date) document.getElementById('input-date-val').value = getDhakaDateInputValue(new Date(post.date));
       document.getElementById('link-website').value = 'DNBangla.com.bd';
