@@ -90,7 +90,7 @@
   <!-- Early Tab Switcher Definition -->
   <script>
     function switchTab(tabId) {
-      var tabs = ['overview', 'photocard', 'opening', 'texttrigger', 'admanager', 'schedule', 'staff', 'integrations', 'logs'];
+      var tabs = ['overview', 'photocard', 'texttrigger', 'admanager', 'schedule', 'staff', 'integrations', 'logs'];
       tabs.forEach(function(t) {
         var el = document.getElementById('tab-' + t);
         if (el) el.classList.add('hidden');
@@ -128,9 +128,6 @@
       </button>
       <button onclick="switchTab('photocard')" id="nav-photocard" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition text-slate-300 hover:bg-slate-800 text-left">
         <i class="fa-solid fa-image w-5 text-center"></i> ফটোকার্ড জেনারেটর (1920x1920)
-      </button>
-      <button onclick="switchTab('opening')" id="nav-opening" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition text-slate-300 hover:bg-slate-800 text-left">
-        <i class="fa-solid fa-person-rays w-5 text-center"></i> অপেনিং ফটোকার্ড
       </button>
       <button onclick="switchTab('texttrigger')" id="nav-texttrigger" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition text-slate-300 hover:bg-slate-800 text-left">
         <i class="fa-solid fa-font w-5 text-center"></i> টেক্সট / টিগার ফটোকার্ড
@@ -560,80 +557,6 @@
             </div>
           </div>
 
-        </div>
-      </section>
-
-      <section id="tab-opening" class="hidden space-y-6">
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          <div class="lg:col-span-5 bg-slate-900 rounded-xl border border-slate-800 p-5 space-y-4 max-h-[85vh] overflow-y-auto">
-            <div class="border-b border-slate-800 pb-3">
-              <h3 class="font-bold text-base text-white">অপেনিং ফটোকার্ড</h3>
-              <p class="text-xs text-slate-400 mt-1">১৯২০×১৯২০ · ছবি ও লেখা বিপরীত পাশে · 1920×280 বিজ্ঞাপন</p>
-            </div>
-            <div class="space-y-2">
-              <label class="block text-xs font-semibold text-amber-400">মূল ছবি (JPG / JPEG / WebP)</label>
-              <input id="opening-photo-file" type="file" accept="image/jpeg,image/webp" class="w-full text-xs text-slate-400 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-slate-800 file:text-slate-200">
-              <div class="flex gap-2">
-                <button id="opening-remove-bg" onclick="removeOpeningBackground()" class="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded text-xs font-semibold">AI দিয়ে Background Remove</button>
-                <button id="opening-retry-bg" onclick="removeOpeningBackground(true)" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded text-xs">আবার চেষ্টা</button>
-              </div>
-              <p id="opening-remove-status" class="text-[11px] text-slate-400" role="status" aria-live="polite">প্রথমবার model download প্রায় ৪০–৮০ MB হতে পারে।</p>
-              <div id="opening-cutout-tools" class="hidden space-y-2 bg-slate-900 border border-slate-700 rounded p-3">
-                <div class="flex items-center justify-between"><span class="text-[11px] font-semibold text-slate-200">Cutout Erase / Restore</span><button onclick="resetOpeningCutoutBrushes()" class="text-[10px] text-amber-300 underline">পরিবর্তন বাতিল</button></div>
-                <canvas id="opening-cutout-editor" width="1" height="1" class="max-h-48 max-w-full mx-auto touch-none cursor-crosshair bg-[conic-gradient(#4b5563_25%,#1f2937_0_50%,#4b5563_0_75%,#1f2937_0)] bg-[length:16px_16px]"></canvas>
-                <div class="grid grid-cols-2 gap-2"><label class="text-[10px] text-slate-300">Brush mode<select id="opening-brush-mode" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-[10px]"><option value="erase">Erase</option><option value="restore">Restore</option></select></label><label class="text-[10px] text-slate-300">Brush size <output id="opening-brush-size-label">36 px</output><input id="opening-brush-size" type="range" min="8" max="160" value="36" class="w-full accent-red-500"></label></div>
-              </div>
-              <p class="text-[10px] text-slate-500">Cutout PNG-তে transparent alpha থাকবে; JPG ফটোকার্ডে সেটি নির্বাচিত background-এর ওপরে বসবে। Removal engine: AGPL-3.0, <a class="text-blue-300 underline" href="https://github.com/imgly/background-removal-js" target="_blank" rel="noopener noreferrer">source/license</a>.</p>
-            </div>
-            <div class="grid grid-cols-2 gap-3">
-              <label class="text-xs text-slate-300">ছবির পাশ<select id="opening-side" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-2 text-xs"><option value="right">ডান পাশে · লেখা বামে</option><option value="left">বাম পাশে · লেখা ডানে</option></select></label>
-              <label class="text-xs text-slate-300">Vertical Alignment<select id="opening-valign" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-2 text-xs"><option value="center">মাঝখানে</option><option value="top">উপরে</option><option value="bottom">নিচে</option></select></label>
-            </div>
-            <label class="block text-xs text-slate-300">ছবির সাইজ <output id="opening-scale-label">100%</output><input id="opening-scale" type="range" min="50" max="140" value="100" class="w-full accent-red-500"></label>
-            <label class="block text-xs text-slate-300">Horizontal position <output id="opening-x-label">0px</output><input id="opening-x" type="range" min="-300" max="300" value="0" class="w-full accent-red-500"></label>
-            <label class="block text-xs text-slate-300">Vertical position <output id="opening-y-label">0px</output><input id="opening-y" type="range" min="-500" max="500" value="0" class="w-full accent-red-500"></label>
-            <label class="block text-xs text-slate-300">Rotation <output id="opening-rotation-label">0°</output><input id="opening-rotation" type="range" min="-20" max="20" value="0" class="w-full accent-red-500"></label>
-            <label class="block text-xs text-slate-300">মূল লেখা<textarea id="opening-message" rows="4" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-sm">নতুন দিনের নতুন সম্ভাবনায় আপনাকে স্বাগতম</textarea></label>
-            <label class="block text-xs text-slate-300">Font size <output id="opening-font-label">75px</output><input id="opening-font-size" type="range" min="40" max="120" value="75" class="w-full accent-red-500"></label>
-            <div class="grid grid-cols-2 gap-3">
-              <label class="text-xs text-slate-300">Text alignment<select id="opening-text-align" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-2 text-xs"><option value="center">Center</option><option value="left">Left</option><option value="right">Right</option></select></label>
-              <label class="text-xs text-slate-300">লেখার রং<input id="opening-text-color" type="color" value="#ffffff" class="mt-1 block w-full h-9 bg-slate-950 border border-slate-700 rounded p-1"></label>
-            </div>
-            <label class="block text-xs text-slate-300">Background style<select id="opening-background" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-2 text-xs"><option value="red">DN Bangla Red Gradient</option><option value="blue">Deep Slate Night</option><option value="maroon">Maroon Classic</option><option value="dark">Dark Minimal</option><option value="custom">Custom color</option></select></label>
-            <label class="text-xs text-slate-300">Custom color<input id="opening-custom-color" type="color" value="#b20710" class="mt-1 block w-full h-9 bg-slate-950 border border-slate-700 rounded p-1" disabled></label>
-            <div class="grid grid-cols-2 gap-3">
-              <label class="text-xs text-slate-300">Header background<input id="opening-header-color" type="color" value="#ffffff" class="mt-1 block w-full h-9 bg-slate-950 border border-slate-700 rounded p-1"></label>
-              <label class="text-xs text-slate-300">Date text<input id="opening-date-color" type="color" value="#111111" class="mt-1 block w-full h-9 bg-slate-950 border border-slate-700 rounded p-1"></label>
-            </div>
-            <div class="grid grid-cols-2 gap-3">
-              <label class="text-xs text-slate-300">Logo (JPG / WebP)<input id="opening-logo-file" type="file" accept="image/jpeg,image/webp" class="mt-1 w-full text-[10px] text-slate-400"></label>
-              <label class="text-xs text-slate-300">Manual date<input id="opening-date" type="date" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-2 text-xs"></label>
-            </div>
-            <label class="flex items-center gap-2 text-xs text-slate-300"><input id="opening-auto-date" type="checkbox" checked> বাংলাদেশ সময় অনুযায়ী অটো তারিখ</label>
-            <div class="space-y-2 border-t border-slate-800 pt-3">
-              <label class="flex items-center gap-2 text-xs text-slate-300"><input id="opening-show-footer" type="checkbox" checked> ওয়েবসাইট ও সোশ্যাল footer দেখান</label>
-              <label class="flex items-center gap-2 text-xs text-slate-300"><input id="opening-show-ad" type="checkbox" checked> নির্বাচিত বিজ্ঞাপন ব্যানার দেখান</label>
-              <label class="block text-xs text-slate-300">ফুটার ব্যাকগ্রাউন্ড<input id="opening-footer-color" type="color" value="#1e293b" class="mt-1 block w-full h-9 bg-slate-950 border border-slate-700 rounded p-1"></label>
-              <label class="block text-xs text-slate-300">বিজ্ঞাপন<select id="opening-ad-select" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-2 text-xs"></select></label>
-            </div>
-            <div class="space-y-2 border-t border-slate-800 pt-3">
-              <label class="block text-xs text-slate-300">Opening template<select id="opening-template" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded px-2 py-2 text-xs"><option value="red-right">লাল · ছবি ডানে</option><option value="red-left">লাল · ছবি বামে</option><option value="night-right">ডার্ক · ছবি ডানে</option></select></label>
-              <input id="opening-template-name" type="text" placeholder="টেমপ্লেটের নাম" class="w-full bg-slate-950 border border-slate-700 rounded px-2 py-2 text-xs text-white">
-              <div class="grid grid-cols-3 gap-2">
-                <button onclick="saveOpeningTemplate('save')" class="px-2 py-2 bg-blue-600 hover:bg-blue-700 rounded text-[10px]">সংরক্ষণ</button>
-                <button onclick="saveOpeningTemplate('duplicate')" class="px-2 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded text-[10px]">ডুপ্লিকেট</button>
-                <button onclick="deleteOpeningTemplate()" class="px-2 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded text-[10px]">মুছুন</button>
-              </div>
-              <p class="text-[10px] text-slate-500">GitHub Pages demo: saved templates এই browser-এ থাকে; cross-device database sync নেই।</p>
-            </div>
-            <div class="flex gap-2"><button onclick="resetOpeningCard()" class="flex-1 px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded text-xs">ডিফল্টে ফিরুন</button><button onclick="downloadOpeningCutout()" class="flex-1 px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded text-xs">Cutout PNG</button></div>
-            <button onclick="downloadOpeningCard()" class="w-full px-3 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-bold">HD Opening Card JPG · 1920×1920</button>
-          </div>
-          <div class="lg:col-span-7 bg-slate-900 rounded-xl border border-slate-800 p-5 flex flex-col items-center gap-3">
-            <div class="w-full flex items-center justify-between"><h3 class="text-sm font-bold text-white">লাইভ প্রিভিউ</h3><span class="text-xs text-slate-400">Content: X70–1850 · Y110–1530</span></div>
-            <canvas id="openingCanvas" width="1920" height="1920" class="w-full max-w-[560px] aspect-square rounded-lg border border-slate-700 bg-slate-950 cursor-grab touch-none"></canvas>
-            <p class="text-[11px] text-slate-400">ছবি টেনে অবস্থান বদলান। AI cutout transparent PNG; final card JPG.</p>
-          </div>
         </div>
       </section>
 
@@ -1724,7 +1647,6 @@ let defaultAds = [
       loadSavedApiSettings();
       drawCanvas();
       drawTextTriggerCanvas();
-      initOpeningCard();
 
       // Connect to WordPress (dnbangla.com.bd)
       syncWordPress(false);
@@ -1745,7 +1667,6 @@ let defaultAds = [
         document.fonts.ready.then(() => {
           drawCanvas();
           drawTextTriggerCanvas();
-          drawOpeningCard();
         });
       }
     };
@@ -1772,7 +1693,6 @@ let defaultAds = [
             adImageObjs[idx] = img;
             drawCanvas();
             if (typeof drawTextTriggerCanvas === 'function') drawTextTriggerCanvas();
-            if (typeof drawOpeningCard === 'function') drawOpeningCard();
           };
           img.src = safeUrl;
         }).catch(err => {
@@ -1859,7 +1779,7 @@ let defaultAds = [
 
     window.switchTab = switchTab;
     function switchTab(tabId) {
-      const tabs = ['overview', 'photocard', 'opening', 'texttrigger', 'admanager', 'schedule', 'staff', 'integrations', 'logs'];
+      const tabs = ['overview', 'photocard', 'texttrigger', 'admanager', 'schedule', 'staff', 'integrations', 'logs'];
       tabs.forEach(t => {
         const el = document.getElementById('tab-' + t);
         if (el) el.classList.add('hidden');
@@ -1959,12 +1879,6 @@ let defaultAds = [
         opt.textContent = ad.name + ' (' + ad.desc.substring(0, 25) + '...)';
         select.appendChild(opt);
       });
-      const openingSelect = document.getElementById('opening-ad-select');
-      if (openingSelect) {
-        const selected = openingSelect.value || String(currentAdIndex);
-        openingSelect.innerHTML = adBanners.map((ad, index) => `<option value="${index}">${escapeHtml(ad.name)}</option>`).join('');
-        openingSelect.value = adBanners.some((ad, index) => String(index) === selected) ? selected : String(currentAdIndex);
-      }
     }
 
     function changeSelectedAd(val) {
@@ -1972,8 +1886,6 @@ let defaultAds = [
       if (!Number.isInteger(index) || index < 0 || index >= adBanners.length) return;
       currentAdIndex = index;
       document.getElementById('topbar-ad-name').textContent = adBanners[currentAdIndex].name;
-      const openingAdSelect = document.getElementById('opening-ad-select');
-      if (openingAdSelect) openingAdSelect.value = String(currentAdIndex);
       drawCanvas();
     }
 
@@ -1985,8 +1897,6 @@ let defaultAds = [
       currentAdIndex = (currentAdIndex + 1) % adBanners.length;
       const select = document.getElementById('ad-banner-select');
       if(select) select.value = currentAdIndex;
-      const openingAdSelect = document.getElementById('opening-ad-select');
-      if (openingAdSelect) openingAdSelect.value = String(currentAdIndex);
       document.getElementById('topbar-ad-name').textContent = adBanners[currentAdIndex].name;
       drawCanvas();
       showToast('পরবর্তী বিজ্ঞাপনের ব্যানার লোড করা হয়েছে: ' + adBanners[currentAdIndex].name);
@@ -2713,662 +2623,6 @@ let defaultAds = [
       );
     }
 
-    let openingOriginalFile = null;
-    let openingOriginalImage = null;
-    let openingCutoutImage = null;
-    let openingCutoutCanvas = null;
-    let openingCutoutBaseCanvas = null;
-    let openingCutoutBlob = null;
-    let openingBrushStrokes = [];
-    let openingActiveBrushStroke = null;
-    let openingLogoImage = null;
-    let openingRemovalEngine = null;
-    let openingImageRect = null;
-    let openingDragState = null;
-    const OPENING_TEMPLATES_KEY = 'dnb_opening_templates_v1';
-
-    const openingPalettes = {
-      red: ['#B20710', '#0F172A'],
-      blue: ['#334155', '#0B1224'],
-      maroon: ['#840B0B', '#241018'],
-      dark: ['#111827', '#030712']
-    };
-
-    function initOpeningCard() {
-      const dateInput = document.getElementById('opening-date');
-      if (dateInput) {
-        dateInput.value = getDhakaDateInputValue();
-        dateInput.disabled = document.getElementById('opening-auto-date').checked;
-      }
-      const adSelect = document.getElementById('opening-ad-select');
-      if (adSelect) {
-        adSelect.innerHTML = adBanners.map((ad, index) => `<option value="${index}">${escapeHtml(ad.name)}</option>`).join('');
-        adSelect.value = String(currentAdIndex);
-      }
-      renderOpeningTemplateOptions();
-      ['opening-side', 'opening-valign', 'opening-scale', 'opening-x', 'opening-y', 'opening-rotation', 'opening-message', 'opening-font-size', 'opening-text-align', 'opening-text-color', 'opening-background', 'opening-custom-color', 'opening-header-color', 'opening-date-color', 'opening-date', 'opening-auto-date', 'opening-show-footer', 'opening-show-ad', 'opening-footer-color', 'opening-ad-select', 'opening-template'].forEach(id => {
-        const element = document.getElementById(id);
-        if (element) element.addEventListener('input', handleOpeningInput);
-        if (element && ['opening-side', 'opening-valign', 'opening-background', 'opening-auto-date', 'opening-show-footer', 'opening-show-ad', 'opening-ad-select', 'opening-template'].includes(id)) {
-          element.addEventListener('change', handleOpeningInput);
-        }
-      });
-      document.getElementById('opening-photo-file')?.addEventListener('change', handleOpeningPhotoUpload);
-      document.getElementById('opening-logo-file')?.addEventListener('change', handleOpeningLogoUpload);
-      const canvas = document.getElementById('openingCanvas');
-      canvas?.addEventListener('pointerdown', beginOpeningDrag);
-      canvas?.addEventListener('pointermove', moveOpeningDrag);
-      canvas?.addEventListener('pointerup', endOpeningDrag);
-      canvas?.addEventListener('pointercancel', endOpeningDrag);
-      const cutoutEditor = document.getElementById('opening-cutout-editor');
-      cutoutEditor?.addEventListener('pointerdown', beginOpeningBrushStroke);
-      cutoutEditor?.addEventListener('pointermove', moveOpeningBrushStroke);
-      cutoutEditor?.addEventListener('pointerup', endOpeningBrushStroke);
-      cutoutEditor?.addEventListener('pointercancel', endOpeningBrushStroke);
-      document.getElementById('opening-brush-size')?.addEventListener('input', event => {
-        document.getElementById('opening-brush-size-label').textContent = `${event.target.value} px`;
-      });
-      drawOpeningCard();
-    }
-
-    function handleOpeningInput(event) {
-      const target = event?.target;
-      if (target?.id === 'opening-auto-date') {
-        document.getElementById('opening-date').disabled = target.checked;
-      }
-      if (target?.id === 'opening-background') {
-        document.getElementById('opening-custom-color').disabled = target.value !== 'custom';
-      }
-      if (target?.id === 'opening-template') applyOpeningTemplate(target.value);
-      updateOpeningControlLabels();
-      drawOpeningCard();
-    }
-
-    function updateOpeningControlLabels() {
-      const values = [
-        ['opening-scale', 'opening-scale-label', value => `${value}%`],
-        ['opening-x', 'opening-x-label', value => `${value}px`],
-        ['opening-y', 'opening-y-label', value => `${value}px`],
-        ['opening-rotation', 'opening-rotation-label', value => `${value}°`],
-        ['opening-font-size', 'opening-font-label', value => `${value}px`]
-      ];
-      values.forEach(([inputId, labelId, format]) => {
-        const input = document.getElementById(inputId);
-        const label = document.getElementById(labelId);
-        if (input && label) label.textContent = format(input.value);
-      });
-    }
-
-    function applyOpeningTemplate(template) {
-      if (template.startsWith('saved:')) {
-        const saved = getOpeningTemplates().find(item => item.id === template.slice(6));
-        if (saved) applyOpeningSettings(saved.settings);
-        return;
-      }
-      const background = document.getElementById('opening-background');
-      const side = document.getElementById('opening-side');
-      if (template === 'red-right') {
-        background.value = 'red';
-        side.value = 'right';
-      } else if (template === 'red-left') {
-        background.value = 'red';
-        side.value = 'left';
-      } else if (template === 'night-right') {
-        background.value = 'dark';
-        side.value = 'right';
-      }
-    }
-
-    function getOpeningTemplates() {
-      try {
-        const templates = JSON.parse(localStorage.getItem(OPENING_TEMPLATES_KEY) || '[]');
-        return Array.isArray(templates) ? templates : [];
-      } catch (error) {
-        return [];
-      }
-    }
-
-    function renderOpeningTemplateOptions() {
-      const select = document.getElementById('opening-template');
-      if (!select) return;
-      select.querySelectorAll('[data-saved-template]').forEach(option => option.remove());
-      getOpeningTemplates().forEach(template => {
-        const option = document.createElement('option');
-        option.value = `saved:${template.id}`;
-        option.dataset.savedTemplate = 'true';
-        option.textContent = `${template.name} · browser`;
-        select.appendChild(option);
-      });
-    }
-
-    function getOpeningSettings() {
-      return {
-        side: document.getElementById('opening-side').value,
-        valign: document.getElementById('opening-valign').value,
-        scale: Number(document.getElementById('opening-scale').value),
-        x: Number(document.getElementById('opening-x').value),
-        y: Number(document.getElementById('opening-y').value),
-        rotation: Number(document.getElementById('opening-rotation').value),
-        message: document.getElementById('opening-message').value,
-        fontSize: Number(document.getElementById('opening-font-size').value),
-        textAlign: document.getElementById('opening-text-align').value,
-        textColor: document.getElementById('opening-text-color').value,
-        background: document.getElementById('opening-background').value,
-        customColor: document.getElementById('opening-custom-color').value,
-        headerColor: document.getElementById('opening-header-color').value,
-        dateColor: document.getElementById('opening-date-color').value,
-        date: document.getElementById('opening-date').value,
-        autoDate: document.getElementById('opening-auto-date').checked,
-        showFooter: document.getElementById('opening-show-footer').checked,
-        showAd: document.getElementById('opening-show-ad').checked,
-        footerColor: document.getElementById('opening-footer-color').value,
-        adIndex: Number(document.getElementById('opening-ad-select').value || 0)
-      };
-    }
-
-    function applyOpeningSettings(settings) {
-      const fields = {
-        side: 'opening-side', valign: 'opening-valign', scale: 'opening-scale', x: 'opening-x',
-        y: 'opening-y', rotation: 'opening-rotation', message: 'opening-message', fontSize: 'opening-font-size',
-        textAlign: 'opening-text-align', textColor: 'opening-text-color', background: 'opening-background',
-        customColor: 'opening-custom-color', headerColor: 'opening-header-color', dateColor: 'opening-date-color',
-        date: 'opening-date', showFooter: 'opening-show-footer', showAd: 'opening-show-ad',
-        footerColor: 'opening-footer-color', adIndex: 'opening-ad-select'
-      };
-      Object.entries(fields).forEach(([key, id]) => {
-        const input = document.getElementById(id);
-        if (!input || settings[key] === undefined) return;
-        if (input.type === 'checkbox') input.checked = Boolean(settings[key]);
-        else input.value = String(settings[key]);
-      });
-      document.getElementById('opening-auto-date').checked = Boolean(settings.autoDate);
-      document.getElementById('opening-date').disabled = Boolean(settings.autoDate);
-      document.getElementById('opening-custom-color').disabled = settings.background !== 'custom';
-      updateOpeningControlLabels();
-      drawOpeningCard();
-    }
-
-    function saveOpeningTemplate(mode = 'save') {
-      const select = document.getElementById('opening-template');
-      const selectedId = select.value.startsWith('saved:') ? select.value.slice(6) : '';
-      const templates = getOpeningTemplates();
-      const existing = templates.find(item => item.id === selectedId);
-      const requestedName = document.getElementById('opening-template-name').value.trim();
-      const name = requestedName || (mode === 'duplicate' ? `কপি · ${existing?.name || 'Opening Card'}` : existing?.name || 'নতুন Opening Card');
-      const id = mode === 'duplicate' || !existing ? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}` : existing.id;
-      const template = { id, name, settings: getOpeningSettings() };
-      const next = mode === 'duplicate' || !existing
-        ? [...templates, template]
-        : templates.map(item => item.id === id ? template : item);
-      try {
-        localStorage.setItem(OPENING_TEMPLATES_KEY, JSON.stringify(next));
-        renderOpeningTemplateOptions();
-        select.value = `saved:${id}`;
-        document.getElementById('opening-template-name').value = '';
-        showOpeningStatus('টেমপ্লেট এই browser-এ সংরক্ষিত হয়েছে।');
-      } catch (error) {
-        showOpeningStatus('Browser storage-এ template রাখা যায়নি।', true);
-      }
-    }
-
-    function deleteOpeningTemplate() {
-      const select = document.getElementById('opening-template');
-      if (!select.value.startsWith('saved:')) {
-        showOpeningStatus('মুছতে saved template নির্বাচন করুন।', true);
-        return;
-      }
-      const id = select.value.slice(6);
-      const remaining = getOpeningTemplates().filter(item => item.id !== id);
-      localStorage.setItem(OPENING_TEMPLATES_KEY, JSON.stringify(remaining));
-      select.value = 'red-right';
-      renderOpeningTemplateOptions();
-      applyOpeningTemplate('red-right');
-      drawOpeningCard();
-    }
-
-    function handleOpeningPhotoUpload(event) {
-      const file = event.target.files?.[0];
-      if (!file) return;
-      if (!['image/jpeg', 'image/webp'].includes(file.type)) {
-        showOpeningStatus('JPG বা WebP ছবি নির্বাচন করুন।', true);
-        event.target.value = '';
-        return;
-      }
-      if (file.size > 20 * 1024 * 1024) {
-        showOpeningStatus('ছবিটি ২০ MB-এর বেশি। ছোট JPG/WebP ব্যবহার করুন।', true);
-        event.target.value = '';
-        return;
-      }
-      openingOriginalFile = file;
-      openingCutoutBlob = null;
-      openingCutoutImage = null;
-      openingCutoutCanvas = null;
-      openingCutoutBaseCanvas = null;
-      openingBrushStrokes = [];
-      document.getElementById('opening-cutout-tools').classList.add('hidden');
-      loadOpeningImage(URL.createObjectURL(file)).then(image => {
-        openingOriginalImage = image;
-        showOpeningStatus('ছবি লোড হয়েছে। Transparent cutout তৈরির জন্য AI remove চাপুন।');
-        drawOpeningCard();
-      }).catch(() => showOpeningStatus('ছবি খোলা যায়নি। অন্য ছবি বেছে নিন।', true));
-    }
-
-    function handleOpeningLogoUpload(event) {
-      const file = event.target.files?.[0];
-      if (!file) return;
-      if (!['image/jpeg', 'image/webp'].includes(file.type)) {
-        showOpeningStatus('Logo JPG বা WebP হতে হবে।', true);
-        event.target.value = '';
-        return;
-      }
-      loadOpeningImage(URL.createObjectURL(file)).then(image => {
-        openingLogoImage = image;
-        drawOpeningCard();
-      }).catch(() => showOpeningStatus('Logo image খোলা যায়নি।', true));
-    }
-
-    function loadOpeningImage(source) {
-      return new Promise((resolve, reject) => {
-        const image = new Image();
-        image.onload = () => {
-          if (typeof source === 'string' && source.startsWith('blob:')) URL.revokeObjectURL(source);
-          resolve(image);
-        };
-        image.onerror = reject;
-        image.src = source;
-      });
-    }
-
-    function drawOpeningCard() {
-      const canvas = document.getElementById('openingCanvas');
-      if (!canvas) return;
-      const ctx = canvas.getContext('2d');
-      const width = 1920;
-      const height = 1920;
-      ctx.clearRect(0, 0, width, height);
-
-      const style = document.getElementById('opening-background').value;
-      const custom = document.getElementById('opening-custom-color').value;
-      const palette = style === 'custom' ? [custom, darkenTextTriggerColor(custom)] : openingPalettes[style] || openingPalettes.red;
-      const background = ctx.createLinearGradient(0, 0, width, height);
-      background.addColorStop(0, palette[0]);
-      background.addColorStop(1, palette[1]);
-      ctx.fillStyle = background;
-      ctx.fillRect(0, 0, width, height);
-
-      const headerColor = document.getElementById('opening-header-color').value;
-      ctx.fillStyle = headerColor;
-      ctx.fillRect(0, 0, width, 85);
-      if (openingLogoImage) {
-        const ratio = Math.min(190 / openingLogoImage.width, 68 / openingLogoImage.height);
-        ctx.drawImage(openingLogoImage, 60, 8, openingLogoImage.width * ratio, openingLogoImage.height * ratio);
-      } else {
-        ctx.font = '900 48px "Hind Siliguri", sans-serif';
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'alphabetic';
-        ctx.fillStyle = '#DF202C';
-        ctx.fillText('ডিএন', 60, 58);
-        ctx.fillStyle = '#16763D';
-        ctx.fillText('বাংলা', 175, 58);
-      }
-      const autoDate = document.getElementById('opening-auto-date').checked;
-      const dateValue = autoDate ? getDhakaDateInputValue() : document.getElementById('opening-date').value;
-      ctx.textAlign = 'right';
-      ctx.fillStyle = document.getElementById('opening-date-color').value;
-      ctx.font = '600 38px "Hind Siliguri", sans-serif';
-      ctx.fillText(formatToBengaliDate(dateValue), 1860, 55, 700);
-
-      const photoColumn = document.getElementById('opening-side').value;
-      const photoX = photoColumn === 'left' ? 70 : 990;
-      const textX = photoColumn === 'left' ? 990 : 70;
-      const columnWidth = 860;
-      const contentTop = 110;
-      const contentHeight = 1420;
-      const image = openingCutoutImage || openingOriginalImage;
-      openingImageRect = null;
-      if (image) {
-        const scaleControl = Number(document.getElementById('opening-scale').value) / 100;
-        const scale = Math.min(columnWidth / image.width, contentHeight / image.height) * scaleControl;
-        const imageWidth = image.width * scale;
-        const imageHeight = image.height * scale;
-        let centerY = contentTop + contentHeight / 2;
-        const vertical = document.getElementById('opening-valign').value;
-        if (vertical === 'top') centerY = contentTop + imageHeight / 2;
-        if (vertical === 'bottom') centerY = contentTop + contentHeight - imageHeight / 2;
-        const centerX = photoX + columnWidth / 2 + Number(document.getElementById('opening-x').value);
-        centerY += Number(document.getElementById('opening-y').value);
-        const rotation = Number(document.getElementById('opening-rotation').value) * Math.PI / 180;
-        openingImageRect = { x: centerX, y: centerY, width: imageWidth, height: imageHeight };
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(photoX, contentTop, columnWidth, contentHeight);
-        ctx.clip();
-        ctx.translate(centerX, centerY);
-        ctx.rotate(rotation);
-        ctx.drawImage(image, -imageWidth / 2, -imageHeight / 2, imageWidth, imageHeight);
-        ctx.restore();
-      } else {
-        ctx.fillStyle = 'rgba(255,255,255,.08)';
-        ctx.fillRect(photoX, contentTop, columnWidth, contentHeight);
-        ctx.fillStyle = '#d7e2da';
-        ctx.textAlign = 'center';
-        ctx.font = '30px "Hind Siliguri", sans-serif';
-        ctx.fillText('ছবি আপলোড করুন', photoX + columnWidth / 2, contentTop + contentHeight / 2);
-      }
-
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(textX, contentTop, columnWidth, contentHeight);
-      ctx.clip();
-      let fontSize = Number(document.getElementById('opening-font-size').value);
-      const message = document.getElementById('opening-message').value;
-      const maxTextWidth = columnWidth - 40;
-      const alignment = document.getElementById('opening-text-align').value;
-      ctx.textAlign = alignment;
-      ctx.textBaseline = 'alphabetic';
-      ctx.fillStyle = document.getElementById('opening-text-color').value;
-      ctx.font = `bold ${fontSize}px "Hind Siliguri", sans-serif`;
-      let lines = wrapText(ctx, message, maxTextWidth);
-      while (lines.length * fontSize * 1.3 > contentHeight - 40 && fontSize > 24) {
-        fontSize -= 2;
-        ctx.font = `bold ${fontSize}px "Hind Siliguri", sans-serif`;
-        lines = wrapText(ctx, message, maxTextWidth);
-      }
-      const lineHeight = fontSize * 1.3;
-      const totalTextHeight = lines.length * lineHeight;
-      const startY = contentTop + (contentHeight - totalTextHeight) / 2 + fontSize * 0.85;
-      const textAnchor = alignment === 'left' ? textX + 20 : alignment === 'right' ? textX + columnWidth - 20 : textX + columnWidth / 2;
-      lines.forEach((line, index) => ctx.fillText(line, textAnchor, startY + index * lineHeight, maxTextWidth));
-      ctx.restore();
-      document.getElementById('opening-font-label').textContent = `${fontSize}px`;
-
-      if (document.getElementById('opening-show-footer').checked) {
-        const footerY = 1563;
-        ctx.fillStyle = document.getElementById('opening-footer-color').value;
-        ctx.fillRect(0, footerY, width, 77);
-        ctx.strokeStyle = '#334155';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(0, footerY, width, 77);
-        const website = document.getElementById('link-website').value.trim();
-        ctx.fillStyle = '#F8FAFC';
-        ctx.font = '600 30px "Hind Siliguri", sans-serif';
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'middle';
-        if (website) ctx.fillText(website, 64, footerY + 38.5, 500);
-        const socials = [
-          ['facebook', 'link-facebook'], ['x', 'link-x'], ['threads', 'link-threads'],
-          ['instagram', 'link-instagram'], ['youtube', 'link-youtube'], ['linkedin', 'link-linkedin']
-        ].filter(([, id]) => document.getElementById(id).value.trim());
-        const groupWidth = socials.length * 52 + Math.max(0, socials.length - 1) * 42;
-        const areaStart = website ? 610 : 0;
-        const areaEnd = website ? 1865 : 1920;
-        const firstX = areaStart + (areaEnd - areaStart - groupWidth) / 2 + 26;
-        socials.forEach(([platform], index) => drawSocialIcon(ctx, platform, firstX + index * 94, footerY + 38.5, 52));
-      }
-
-      if (document.getElementById('opening-show-ad').checked) {
-        const adIndex = Number(document.getElementById('opening-ad-select').value || currentAdIndex);
-        const adImage = adImageObjs[adIndex];
-        if (adImage?.complete) drawImageCover(ctx, adImage, 0, 1640, width, 280);
-        else {
-          ctx.fillStyle = '#27332c';
-          ctx.fillRect(0, 1640, width, 280);
-          ctx.fillStyle = '#d7e2da';
-          ctx.textAlign = 'center';
-          ctx.font = '32px "Hind Siliguri", sans-serif';
-          ctx.fillText('বিজ্ঞাপন ব্যানার লোড হচ্ছে', 960, 1790);
-        }
-      }
-    }
-
-    async function removeOpeningBackground() {
-      if (!openingOriginalFile) {
-        showOpeningStatus('আগে একটি মূল ছবি আপলোড করুন।', true);
-        return;
-      }
-      const status = document.getElementById('opening-remove-status');
-      const buttons = [document.getElementById('opening-remove-bg'), document.getElementById('opening-retry-bg')];
-      buttons.forEach(button => button.disabled = true);
-      showOpeningStatus('AI model load ও background removal চলছে… প্রথমবার ৪০–৮০ MB model নামতে পারে।');
-      try {
-        if (!openingRemovalEngine) {
-          const library = await import('https://esm.sh/@imgly/background-removal@1.7.0?bundle');
-          openingRemovalEngine = library.default || library.removeBackground;
-        }
-        if (typeof openingRemovalEngine !== 'function') throw new Error('Background removal engine পাওয়া যায়নি।');
-        const blob = await openingRemovalEngine(openingOriginalFile, {
-          output: { format: 'image/png', quality: 0.95 },
-          progress: (key, current, total) => {
-            if (status && total > 0) status.textContent = `AI processing: ${Math.round(current / total * 100)}%`;
-          }
-        });
-        if (blob.type !== 'image/png') throw new Error('Background removal did not return a transparent PNG.');
-        const trimmed = await trimOpeningCutout(blob);
-        openingCutoutBlob = trimmed.blob;
-        openingCutoutImage = trimmed.image;
-        initializeOpeningCutoutEditor(trimmed.image);
-        showOpeningStatus('Transparent-alpha PNG cutout প্রস্তুত হয়েছে।');
-        drawOpeningCard();
-      } catch (error) {
-        console.error('Opening PhotoCard background removal error:', error);
-        openingCutoutBlob = null;
-        openingCutoutImage = null;
-        showOpeningStatus('Background removal ব্যর্থ হয়েছে; মূল ছবি অক্ষত আছে। নেটওয়ার্ক/model access পরীক্ষা করে Retry চাপুন।', true);
-        drawOpeningCard();
-      } finally {
-        buttons.forEach(button => button.disabled = false);
-      }
-    }
-
-    async function trimOpeningCutout(blob) {
-      const source = await loadOpeningImage(URL.createObjectURL(blob));
-      const scan = document.createElement('canvas');
-      scan.width = source.naturalWidth;
-      scan.height = source.naturalHeight;
-      const scanContext = scan.getContext('2d', { willReadFrequently: true });
-      scanContext.drawImage(source, 0, 0);
-      const pixels = scanContext.getImageData(0, 0, scan.width, scan.height).data;
-      let left = scan.width;
-      let top = scan.height;
-      let right = -1;
-      let bottom = -1;
-      for (let y = 0; y < scan.height; y += 1) {
-        for (let x = 0; x < scan.width; x += 1) {
-          if (pixels[(y * scan.width + x) * 4 + 3] <= 8) continue;
-          left = Math.min(left, x);
-          top = Math.min(top, y);
-          right = Math.max(right, x);
-          bottom = Math.max(bottom, y);
-        }
-      }
-      if (right < left || bottom < top) throw new Error('কাটআউটে দৃশ্যমান foreground পাওয়া যায়নি।');
-      const width = right - left + 1;
-      const height = bottom - top + 1;
-      if (left === 0 && top === 0 && width === scan.width && height === scan.height) return { blob, image: source };
-      const trimmedCanvas = document.createElement('canvas');
-      trimmedCanvas.width = width;
-      trimmedCanvas.height = height;
-      trimmedCanvas.getContext('2d').drawImage(source, left, top, width, height, 0, 0, width, height);
-      const trimmedBlob = await new Promise(resolve => trimmedCanvas.toBlob(resolve, 'image/png'));
-      if (!trimmedBlob) throw new Error('Transparent cutout encode failed.');
-      return { blob: trimmedBlob, image: await loadOpeningImage(URL.createObjectURL(trimmedBlob)) };
-    }
-
-    function initializeOpeningCutoutEditor(image) {
-      const editor = document.getElementById('opening-cutout-editor');
-      editor.width = image.naturalWidth || image.width;
-      editor.height = image.naturalHeight || image.height;
-      openingCutoutCanvas = editor;
-      openingCutoutBaseCanvas = document.createElement('canvas');
-      openingCutoutBaseCanvas.width = editor.width;
-      openingCutoutBaseCanvas.height = editor.height;
-      openingCutoutBaseCanvas.getContext('2d').drawImage(image, 0, 0);
-      openingBrushStrokes = [];
-      document.getElementById('opening-cutout-tools').classList.remove('hidden');
-      renderOpeningCutoutEditor();
-    }
-
-    function beginOpeningBrushStroke(event) {
-      if (!openingCutoutCanvas || !openingCutoutBaseCanvas) return;
-      const canvas = event.currentTarget;
-      const rect = canvas.getBoundingClientRect();
-      const point = {
-        x: (event.clientX - rect.left) * canvas.width / rect.width,
-        y: (event.clientY - rect.top) * canvas.height / rect.height
-      };
-      openingActiveBrushStroke = {
-        mode: document.getElementById('opening-brush-mode').value,
-        size: Number(document.getElementById('opening-brush-size').value) * canvas.width / rect.width,
-        points: [point]
-      };
-      openingBrushStrokes.push(openingActiveBrushStroke);
-      canvas.setPointerCapture(event.pointerId);
-      renderOpeningCutoutEditor();
-    }
-
-    function moveOpeningBrushStroke(event) {
-      if (!openingActiveBrushStroke) return;
-      const canvas = event.currentTarget;
-      const rect = canvas.getBoundingClientRect();
-      openingActiveBrushStroke.points.push({
-        x: (event.clientX - rect.left) * canvas.width / rect.width,
-        y: (event.clientY - rect.top) * canvas.height / rect.height
-      });
-      renderOpeningCutoutEditor();
-    }
-
-    function endOpeningBrushStroke() {
-      if (!openingActiveBrushStroke) return;
-      openingActiveBrushStroke = null;
-      renderOpeningCutoutEditor();
-    }
-
-    function renderOpeningCutoutEditor() {
-      if (!openingCutoutCanvas || !openingCutoutBaseCanvas) return;
-      const editor = openingCutoutCanvas;
-      const ctx = editor.getContext('2d');
-      const mask = document.createElement('canvas');
-      mask.width = editor.width;
-      mask.height = editor.height;
-      const maskContext = mask.getContext('2d');
-      maskContext.fillStyle = '#fff';
-      maskContext.fillRect(0, 0, mask.width, mask.height);
-      openingBrushStrokes.forEach(stroke => {
-        if (!stroke.points.length) return;
-        maskContext.save();
-        maskContext.globalCompositeOperation = stroke.mode === 'erase' ? 'destination-out' : 'source-over';
-        maskContext.strokeStyle = '#fff';
-        maskContext.fillStyle = '#fff';
-        maskContext.lineWidth = stroke.size;
-        maskContext.lineCap = 'round';
-        maskContext.lineJoin = 'round';
-        maskContext.beginPath();
-        maskContext.moveTo(stroke.points[0].x, stroke.points[0].y);
-        if (stroke.points.length === 1) {
-          maskContext.arc(stroke.points[0].x, stroke.points[0].y, stroke.size / 2, 0, Math.PI * 2);
-          maskContext.fill();
-        } else {
-          stroke.points.slice(1).forEach(point => maskContext.lineTo(point.x, point.y));
-          maskContext.stroke();
-        }
-        maskContext.restore();
-      });
-      ctx.clearRect(0, 0, editor.width, editor.height);
-      ctx.drawImage(openingCutoutBaseCanvas, 0, 0);
-      ctx.globalCompositeOperation = 'destination-in';
-      ctx.drawImage(mask, 0, 0);
-      ctx.globalCompositeOperation = 'source-over';
-      openingCutoutImage = editor;
-      editor.toBlob(blob => { if (blob) openingCutoutBlob = blob; }, 'image/png');
-      drawOpeningCard();
-    }
-
-    function resetOpeningCutoutBrushes() {
-      openingBrushStrokes = [];
-      renderOpeningCutoutEditor();
-    }
-
-    function showOpeningStatus(message, isError = false) {
-      const status = document.getElementById('opening-remove-status');
-      status.textContent = message;
-      status.className = isError ? 'text-[11px] text-red-300' : 'text-[11px] text-slate-400';
-    }
-
-    function beginOpeningDrag(event) {
-      const canvas = event.currentTarget;
-      const rect = canvas.getBoundingClientRect();
-      const x = (event.clientX - rect.left) * canvas.width / rect.width;
-      const y = (event.clientY - rect.top) * canvas.height / rect.height;
-      if (!openingImageRect) return;
-      const side = document.getElementById('opening-side').value;
-      const columnX = side === 'left' ? 70 : 990;
-      if (x < columnX || x > columnX + 860 || y < 110 || y > 1530) return;
-      openingDragState = { pointerX: x, pointerY: y, startX: Number(document.getElementById('opening-x').value), startY: Number(document.getElementById('opening-y').value) };
-      canvas.setPointerCapture(event.pointerId);
-      canvas.classList.add('cursor-grabbing');
-    }
-
-    function moveOpeningDrag(event) {
-      if (!openingDragState) return;
-      const canvas = event.currentTarget;
-      const rect = canvas.getBoundingClientRect();
-      const x = (event.clientX - rect.left) * canvas.width / rect.width;
-      const y = (event.clientY - rect.top) * canvas.height / rect.height;
-      document.getElementById('opening-x').value = String(Math.max(-300, Math.min(300, openingDragState.startX + x - openingDragState.pointerX)));
-      document.getElementById('opening-y').value = String(Math.max(-500, Math.min(500, openingDragState.startY + y - openingDragState.pointerY)));
-      updateOpeningControlLabels();
-      drawOpeningCard();
-    }
-
-    function endOpeningDrag(event) {
-      openingDragState = null;
-      event.currentTarget.classList.remove('cursor-grabbing');
-    }
-
-    function resetOpeningCard() {
-      document.getElementById('opening-side').value = 'right';
-      document.getElementById('opening-valign').value = 'center';
-      document.getElementById('opening-scale').value = '100';
-      document.getElementById('opening-x').value = '0';
-      document.getElementById('opening-y').value = '0';
-      document.getElementById('opening-rotation').value = '0';
-      document.getElementById('opening-font-size').value = '75';
-      document.getElementById('opening-background').value = 'red';
-      document.getElementById('opening-text-color').value = '#ffffff';
-      updateOpeningControlLabels();
-      drawOpeningCard();
-    }
-
-    async function downloadOpeningCard() {
-      const canvas = document.getElementById('openingCanvas');
-      await document.fonts.ready;
-      drawOpeningCard();
-      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.94));
-      if (!blob) throw new Error('Opening JPG তৈরি করা যায়নি।');
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = 'DN-Bangla-Opening-Photocard-1920x1920.jpg';
-      link.click();
-      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
-      showOpeningStatus('1920×1920 JPG ডাউনলোড হয়েছে।');
-    }
-
-    async function downloadOpeningCutout() {
-      if (!openingCutoutBlob) {
-        showOpeningStatus('আগে AI background removal সম্পন্ন করুন।', true);
-        return;
-      }
-      const blob = openingCutoutCanvas
-        ? await new Promise(resolve => openingCutoutCanvas.toBlob(resolve, 'image/png'))
-        : openingCutoutBlob;
-      if (!blob) throw new Error('Transparent PNG তৈরি করা যায়নি।');
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = 'DN-Bangla-Opening-Cutout.png';
-      link.click();
-      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
-    }
-
     // ==================== SCHEDULE FUNCTIONS ====================
     function sendScheduleToTextTrigger(textAreaId, categoryTitle) {
       const el = document.getElementById(textAreaId);
@@ -4065,8 +3319,6 @@ let defaultAds = [
       currentAdIndex = index;
       const select = document.getElementById('ad-banner-select');
       if (select) select.value = String(index);
-      const openingAdSelect = document.getElementById('opening-ad-select');
-      if (openingAdSelect) openingAdSelect.value = String(index);
       const name = document.getElementById('topbar-ad-name');
       if (name) name.textContent = adBanners[index].name;
       return index;
