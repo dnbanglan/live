@@ -508,7 +508,10 @@
             </div>
 
             <!-- Action Button -->
-            <div class="pt-2">
+            <div class="pt-2 space-y-2">
+              <button onclick="generateMainPhotoCard()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg text-xs shadow flex items-center justify-center gap-2 transition">
+                <i class="fa-solid fa-wand-magic-sparkles"></i> পরবর্তী চালু বিজ্ঞাপনসহ নতুন ফটোকার্ড তৈরি
+              </button>
               <button onclick="downloadCanvas()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 rounded-lg text-xs shadow flex items-center justify-center gap-2 transition">
                 <i class="fa-solid fa-download"></i> HD ফটোকার্ড ডাউনলোড (1920x1920 PX)
               </button>
@@ -585,7 +588,7 @@
               </div>
               <div>
                 <label class="block text-xs font-semibold text-slate-300 mb-1">উপরে ছোট ক্যাটাগরি:</label>
-                <input type="text" id="text-trigger-cat" value="⚠️ বিশেষ ঘোষণা ও ব্রেকিং নিউজ" oninput="drawTextTriggerCanvas()" class="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-sm text-white">
+                <input type="text" id="text-trigger-cat" value="⚠️ বিশেষ ঘোষণা / ব্রেকিং নিউজ / সর্বশেষ তথ্য / সদ্য পাওয়া তথ্য" oninput="drawTextTriggerCanvas()" class="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-sm text-white">
               </div>
               <div>
                 <label class="block text-xs font-semibold text-slate-300 mb-1">মূল বার্তা (সর্বদা সেন্টারে থাকবে):</label>
@@ -716,6 +719,11 @@
                 <label class="block text-[11px] text-slate-400 mb-1">অথবা ব্যানার ছবির URL:</label>
                 <input type="text" id="new-ad-url" placeholder="https://..." class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-xs text-white font-mono">
               </div>
+            </div>
+            <div class="max-w-sm">
+              <label class="block text-[11px] text-slate-400 mb-1">বিজ্ঞাপনের মেয়াদ শেষের তারিখ (ঐচ্ছিক):</label>
+              <input type="date" id="new-ad-expiry" class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-xs text-white">
+              <p class="text-[10px] text-slate-500 mt-1">তারিখ পার হলে ব্যানারটি নতুন ফটোকার্ডে আর দেখানো হবে না।</p>
             </div>
             <button onclick="uploadAdFromPC()" class="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 rounded text-xs transition flex items-center justify-center gap-2 mt-2">
               <i class="fa-solid fa-floppy-disk"></i> এই ব্রাউজারে স্থায়ী সংরক্ষণ ও সাইকেলে যুক্ত করুন
@@ -1541,9 +1549,9 @@ let defaultAds = [
         )) {
           parsed.forEach(ad => {
             const def = defaultAds.find(d => d.id === ad.id);
-            if (def && !ad.localFallback) {
-              ad.localFallback = def.localFallback;
-            }
+            if (def && !ad.localFallback) ad.localFallback = def.localFallback;
+            if (typeof ad.enabled !== 'boolean') ad.enabled = true;
+            if (typeof ad.expiryDate !== 'string') ad.expiryDate = '';
           });
           const hasOldUnsplash = parsed.some(a => a.image && a.image.includes('unsplash.com') && (a.id === 'ad-1' || a.id === 'ad-2' || a.id === 'ad-3'));
           if (hasOldUnsplash) {
@@ -1571,9 +1579,33 @@ let defaultAds = [
       }
     }
 
+    function isAdActive(ad) {
+      if (!ad || ad.enabled === false) return false;
+      const today = getDhakaDateInputValue();
+      return !ad.expiryDate || ad.expiryDate >= today;
+    }
+
+    function getActiveAdIndices() {
+      return adBanners.map((ad, index) => isAdActive(ad) ? index : -1).filter(index => index >= 0);
+    }
+
+    function nextActiveAdIndex(fromIndex) {
+      const active = getActiveAdIndices();
+      if (!active.length) return -1;
+      const next = active.find(index => index > fromIndex);
+      return next !== undefined ? next : active[0];
+    }
+
+    function ensureCurrentAdActive() {
+      if (!isAdActive(adBanners[currentAdIndex])) currentAdIndex = nextActiveAdIndex(currentAdIndex - 1);
+      if (!isAdActive(adBanners[textAdIndex])) textAdIndex = nextActiveAdIndex(textAdIndex - 1);
+      return getActiveAdIndices().length > 0;
+    }
+
     let adBanners = loadAdBanners();
     let currentAdIndex = 0;
-    let textAdIndex = 0;
+    let textAdIndex = -1;
+    let mainCardGenerated = false;
     let adImageObjs = {};
     let bgImageObj = null;
     let toastTimer = null;
@@ -1650,6 +1682,23 @@ let defaultAds = [
       wpCalendarYear = dhakaDateParts[0];
       wpCalendarMonth = dhakaDateParts[1] - 1;
       loadWpCalendarMonth(wpCalendarYear, wpCalendarMonth);
+      // মেয়াদ শেষ হলে চালু বিজ্ঞাপনের তালিকা/প্রিভিউ আপডেট করুন
+      if (window.adExpiryTimer) clearInterval(window.adExpiryTimer);
+      window.adExpiryTimer = setInterval(() => {
+        const oldCurrent = currentAdIndex;
+        const oldText = textAdIndex;
+        ensureCurrentAdActive();
+        if (oldCurrent !== currentAdIndex || oldText !== textAdIndex) {
+          initAdDropdown();
+          renderAdList();
+          document.getElementById('topbar-ad-name').textContent = adBanners[currentAdIndex]?.name || 'কোনো চালু বিজ্ঞাপন নেই';
+          drawCanvas();
+          drawTextTriggerCanvas();
+        } else {
+          renderAdList();
+        }
+      }, 60000);
+
       // Auto-polling every 45 seconds for newly published articles
       if (wpSyncTimer) clearInterval(wpSyncTimer);
       wpSyncTimer = setInterval(() => {
@@ -1867,35 +1916,97 @@ let defaultAds = [
 
     function initAdDropdown() {
       const select = document.getElementById('ad-banner-select');
-      if(!select) return;
-      select.innerHTML = '';
-      adBanners.forEach((ad, idx) => {
+      if (!select) return;
+      select.replaceChildren();
+      const active = getActiveAdIndices();
+      if (!active.length) {
         const opt = document.createElement('option');
-        opt.value = idx;
-        opt.textContent = ad.name + ' (' + ad.desc.substring(0, 25) + '...)';
+        opt.value = '-1';
+        opt.textContent = 'কোনো চালু বিজ্ঞাপন নেই';
+        select.appendChild(opt);
+        currentAdIndex = -1;
+        const topbar = document.getElementById('topbar-ad-name');
+        if (topbar) topbar.textContent = 'কোনো চালু বিজ্ঞাপন নেই';
+        return;
+      }
+      active.forEach(idx => {
+        const ad = adBanners[idx];
+        const opt = document.createElement('option');
+        opt.value = String(idx);
+        opt.textContent = ad.name + (ad.expiryDate ? ' · মেয়াদ ' + ad.expiryDate : '');
         select.appendChild(opt);
       });
+      if (!active.includes(currentAdIndex)) currentAdIndex = active[0];
+      select.value = String(currentAdIndex);
     }
 
     function changeSelectedAd(val) {
       const index = Number.parseInt(val, 10);
-      if (!Number.isInteger(index) || index < 0 || index >= adBanners.length) return;
+      if (!Number.isInteger(index) || !isAdActive(adBanners[index])) return;
       currentAdIndex = index;
-      document.getElementById('topbar-ad-name').textContent = adBanners[currentAdIndex].name;
+      document.getElementById('topbar-ad-name').textContent = adBanners[index].name;
       drawCanvas();
     }
 
     function rotateToNextAd() {
-      if (!adBanners.length) {
-        showToast('ঘোরানোর জন্য কোনো বিজ্ঞাপন নেই।', 'error');
+      const next = nextActiveAdIndex(currentAdIndex);
+      if (next < 0) {
+        showToast('এখন কোনো চালু ও মেয়াদোত্তীর্ণ নয় এমন বিজ্ঞাপন নেই।', 'error');
+        drawCanvas();
+        drawTextTriggerCanvas();
         return;
       }
-      currentAdIndex = (currentAdIndex + 1) % adBanners.length;
+      currentAdIndex = next;
       const select = document.getElementById('ad-banner-select');
-      if(select) select.value = currentAdIndex;
+      if (select) select.value = String(currentAdIndex);
       document.getElementById('topbar-ad-name').textContent = adBanners[currentAdIndex].name;
       drawCanvas();
-      showToast('পরবর্তী বিজ্ঞাপনের ব্যানার লোড করা হয়েছে: ' + adBanners[currentAdIndex].name);
+      showToast('পরবর্তী চালু বিজ্ঞাপন লোড হয়েছে: ' + adBanners[currentAdIndex].name);
+    }
+
+    function setAdEnabled(idx, enabled) {
+      if (!adBanners[idx]) return;
+      adBanners[idx].enabled = !!enabled;
+      if (!saveAdBanners()) return;
+      ensureCurrentAdActive();
+      initAdDropdown();
+      renderAdList();
+      document.getElementById('topbar-ad-name').textContent = adBanners[currentAdIndex]?.name || 'কোনো চালু বিজ্ঞাপন নেই';
+      drawCanvas();
+      drawTextTriggerCanvas();
+      showToast(enabled ? 'বিজ্ঞাপন চালু করা হয়েছে।' : 'বিজ্ঞাপন বন্ধ করা হয়েছে।');
+    }
+
+    function setAdExpiry(idx, date) {
+      if (!adBanners[idx]) return;
+      adBanners[idx].expiryDate = date || '';
+      if (!saveAdBanners()) return;
+      ensureCurrentAdActive();
+      initAdDropdown();
+      renderAdList();
+      drawCanvas();
+      drawTextTriggerCanvas();
+      showToast('বিজ্ঞাপনের মেয়াদ সংরক্ষণ করা হয়েছে।');
+    }
+
+    function generateMainPhotoCard() {
+      const next = mainCardGenerated && isAdActive(adBanners[currentAdIndex])
+        ? nextActiveAdIndex(currentAdIndex)
+        : (isAdActive(adBanners[currentAdIndex]) ? currentAdIndex : nextActiveAdIndex(-1));
+      if (next < 0) {
+        currentAdIndex = -1;
+        initAdDropdown();
+        drawCanvas();
+        showToast('চালু বিজ্ঞাপন নেই। আগে বিজ্ঞাপন চালু করুন।', 'error');
+        return;
+      }
+      currentAdIndex = next;
+      mainCardGenerated = true;
+      const select = document.getElementById('ad-banner-select');
+      if (select) select.value = String(currentAdIndex);
+      document.getElementById('topbar-ad-name').textContent = adBanners[currentAdIndex].name;
+      drawCanvas();
+      showToast('নতুন ফটোকার্ড তৈরি হয়েছে। বিজ্ঞাপন: ' + adBanners[currentAdIndex].name);
     }
 
     function renderAdList() {
@@ -1925,6 +2036,34 @@ let defaultAds = [
         description.className = 'text-[10px] text-slate-400 truncate';
         description.textContent = ad.desc;
 
+        const statusRow = document.createElement('div');
+        statusRow.className = 'flex items-center justify-between gap-2 text-[10px]';
+        const enabledLabel = document.createElement('label');
+        enabledLabel.className = 'flex items-center gap-2 text-slate-300 cursor-pointer';
+        const enabledInput = document.createElement('input');
+        enabledInput.type = 'checkbox';
+        enabledInput.checked = ad.enabled !== false;
+        enabledInput.className = 'accent-emerald-500';
+        enabledInput.onchange = () => setAdEnabled(idx, enabledInput.checked);
+        enabledLabel.append(enabledInput, document.createTextNode('ম্যানুয়ালি চালু'));
+        const status = document.createElement('span');
+        const activeNow = isAdActive(ad);
+        status.className = activeNow ? 'text-emerald-400' : 'text-red-300';
+        status.textContent = ad.enabled === false ? 'বন্ধ' : (ad.expiryDate && ad.expiryDate < getDhakaDateInputValue() ? 'মেয়াদ শেষ' : 'চালু');
+        statusRow.append(enabledLabel, status);
+
+        const expiryWrap = document.createElement('div');
+        expiryWrap.className = 'space-y-1';
+        const expiryLabel = document.createElement('label');
+        expiryLabel.className = 'block text-[10px] text-slate-400';
+        expiryLabel.textContent = 'মেয়াদ শেষের তারিখ (ঐচ্ছিক)';
+        const expiryInput = document.createElement('input');
+        expiryInput.type = 'date';
+        expiryInput.value = ad.expiryDate || '';
+        expiryInput.className = 'w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[11px] text-white';
+        expiryInput.onchange = () => setAdExpiry(idx, expiryInput.value);
+        expiryWrap.append(expiryLabel, expiryInput);
+
         const actions = document.createElement('div');
         actions.className = 'flex gap-2 pt-1';
         const selectButton = document.createElement('button');
@@ -1940,16 +2079,16 @@ let defaultAds = [
         deleteButton.innerHTML = '<i class="fa-solid fa-trash" aria-hidden="true"></i>';
         deleteButton.onclick = () => deleteAd(idx);
         actions.append(selectButton, deleteButton);
-        card.append(imageWrap, name, description, actions);
+        card.append(imageWrap, name, description, statusRow, expiryWrap, actions);
         container.appendChild(card);
       });
       const overviewEl = document.getElementById('overview-active-ads');
-      if (overviewEl) overviewEl.textContent = adBanners.length + ' টি';
+      if (overviewEl) overviewEl.textContent = getActiveAdIndices().length + ' / ' + adBanners.length + ' টি';
     }
 
     function restoreDefaultBanners() {
       if (confirm('আপনি কি ডিফল্ট ৫টি বিজ্ঞাপন ব্যানার পুনরায় লোড ও স্থায়ী সংরক্ষণ করতে চান?')) {
-        adBanners = [...defaultAds];
+        adBanners = defaultAds.map(ad => ({ ...ad, enabled: true, expiryDate: '' }));
         saveAdBanners();
         currentAdIndex = 0;
         initAdDropdown();
@@ -1990,7 +2129,9 @@ let defaultAds = [
               id: 'ad-' + Date.now(),
               name: name.trim(),
               desc: desc.trim() || 'বিশেষ বিজ্ঞাপন',
-              image: event.target.result
+              image: event.target.result,
+              enabled: true,
+              expiryDate: document.getElementById('new-ad-expiry')?.value || ''
             };
             adBanners.push(newAd);
             if (!saveAdBanners()) {
@@ -2008,6 +2149,8 @@ let defaultAds = [
             drawTextTriggerCanvas();
             document.getElementById('new-ad-name').value = '';
             document.getElementById('new-ad-desc').value = '';
+            const expiryInput = document.getElementById('new-ad-expiry');
+            if (expiryInput) expiryInput.value = '';
             if (urlInput) urlInput.value = '';
             fileInput.value = '';
             showToast('ব্যানার এই ব্রাউজারে স্থায়ী সংরক্ষণ করা হয়েছে।');
@@ -2034,7 +2177,9 @@ let defaultAds = [
               id: 'ad-' + Date.now(),
               name: name.trim(),
               desc: desc.trim() || 'অনলাইন বিজ্ঞাপন',
-              image: imageUrl
+              image: imageUrl,
+              enabled: true,
+              expiryDate: document.getElementById('new-ad-expiry')?.value || ''
             };
             adBanners.push(newAd);
             if (!saveAdBanners()) {
@@ -2052,6 +2197,8 @@ let defaultAds = [
             drawTextTriggerCanvas();
             document.getElementById('new-ad-name').value = '';
             document.getElementById('new-ad-desc').value = '';
+            const expiryInput = document.getElementById('new-ad-expiry');
+            if (expiryInput) expiryInput.value = '';
             if (urlInput) urlInput.value = '';
             fileInput.value = '';
             showToast('অনলাইন ব্যানার স্থায়ী সংরক্ষণ করা হয়েছে।');
@@ -2077,12 +2224,15 @@ let defaultAds = [
         }
         const selectedIndex = adBanners.findIndex(ad => ad.id === selectedId);
         currentAdIndex = selectedIndex >= 0 ? selectedIndex : Math.min(idx, adBanners.length - 1);
+        textAdIndex = Math.min(textAdIndex, adBanners.length - 1);
+        ensureCurrentAdActive();
         initAdDropdown();
         document.getElementById('ad-banner-select').value = currentAdIndex;
         renderAdList();
         preloadAdImages();
         document.getElementById('topbar-ad-name').textContent = adBanners[currentAdIndex].name;
         drawCanvas();
+        drawTextTriggerCanvas();
         showToast('বিজ্ঞাপনটি এই ব্রাউজার থেকে মুছে ফেলা হয়েছে।');
       }
     }
@@ -2283,7 +2433,8 @@ let defaultAds = [
       // ADVERTISEMENT BANNER AREA (1640px to 1920px)
       const adY = 1640;
       const adH = 280;
-      const adImg = adImageObjs[currentAdIndex];
+      ensureCurrentAdActive();
+      const adImg = currentAdIndex >= 0 && isAdActive(adBanners[currentAdIndex]) ? adImageObjs[currentAdIndex] : null;
 
       if (adImg && adImg.complete) {
         drawImageCover(ctx, adImg, 0, adY, width, adH);
@@ -2590,7 +2741,8 @@ let defaultAds = [
       });
 
       // Advertisement strip: use the shared ad list, but rotate independently
-      const safeTextAdIndex = adBanners.length ? textAdIndex % adBanners.length : -1;
+      if (!isAdActive(adBanners[textAdIndex])) textAdIndex = nextActiveAdIndex(textAdIndex - 1);
+      const safeTextAdIndex = textAdIndex >= 0 && isAdActive(adBanners[textAdIndex]) ? textAdIndex : -1;
       const adImg = safeTextAdIndex >= 0 ? adImageObjs[safeTextAdIndex] : null;
       if (adImg && adImg.complete) {
         drawImageCover(ctx, adImg, 0, adY, width, adH);
@@ -2601,9 +2753,7 @@ let defaultAds = [
     }
 
     function generateTextTriggerCard() {
-      if (adBanners.length) {
-        textAdIndex = (textAdIndex + 1) % adBanners.length;
-      }
+      textAdIndex = nextActiveAdIndex(textAdIndex);
       drawTextTriggerCanvas();
       const adName = adBanners[textAdIndex]?.name;
       showToast(adName
@@ -3070,9 +3220,9 @@ let defaultAds = [
 
         ctx.fillStyle = '#334155';
         ctx.font = '14px "Hind Siliguri", sans-serif';
-        ctx.fillText('ডিএন বাংলা টাওয়ার, প্লট-৭, কাওরান বাজার, ঢাকা-১২১৫', w / 2, 435);
-        ctx.fillText('ফোন: +৮৮০-২-৯৯৮৮৭৭৬৬ | ইমেইল: info@dnbangla.com.bd', w / 2, 465);
-        ctx.fillText('জরুরি হটলাইন: ০১৯৪৫৫৪৪২৪২', w / 2, 495);
+        ctx.fillText('অফিস: মৃধাকান্দা, নবাবগঞ্জ, ঢাকা-১৩২০', w / 2, 435);
+        ctx.fillText('ফোন: +88016-1161-8916 | ইমেইল: info@dnbangla.com.bd', w / 2, 465);
+        ctx.fillText('জরুরি হটলাইন: +88016-1161-8916', w / 2, 495);
         ctx.fillText('ওয়েবসাইট: www.dnbangla.com.bd', w / 2, 525);
 
         const bcY = 660;
@@ -3149,11 +3299,18 @@ let defaultAds = [
         }
       };
 
-      showToast('এই GitHub Pages ডেমোতে API credential সংরক্ষণ বা সংযোগ নেই। WordPress plugin backend প্রয়োজন।', 'info');
+try {
+  localStorage.setItem(API_STORAGE_KEY, JSON.stringify(settings));
+  showToast('API সেটিংস সফলভাবে সংরক্ষণ হয়েছে।', 'success');
+} catch (error) {
+  console.error('API settings save failed:', error);
+  showToast('সেটিংস সংরক্ষণ ব্যর্থ হয়েছে। ব্রাউজারের স্টোরেজ পরীক্ষা করুন।', 'error');
+}
     }
 
+    
+
     function loadSavedApiSettings() {
-      localStorage.removeItem(API_STORAGE_KEY);
       try {
         const saved = localStorage.getItem(API_STORAGE_KEY);
         if(!saved) return;
@@ -3779,5 +3936,160 @@ let defaultAds = [
         : 'ওয়ার্ডপ্রেস অটো ফটোকার্ড জেনারেটর সাময়িক বন্ধ করা হয়েছে।', 'info');
     }
   </script>
+
+<style>
+#auth-gate{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;background:radial-gradient(circle at top,#1e293b,#020617 70%);font-family:'Hind Siliguri',sans-serif}#auth-gate .auth-card{width:min(100%,440px);background:#0f172a;border:1px solid #334155;border-radius:20px;padding:28px;box-shadow:0 25px 80px #0008}#auth-gate input{width:100%;background:#020617;border:1px solid #475569;border-radius:9px;padding:11px;color:white;margin-top:5px}#auth-gate button,.auth-action{background:#dc2626;color:white;border-radius:9px;padding:10px 14px;font-weight:700}#auth-gate .muted{color:#94a3b8;font-size:12px}#account-panel{background:#0f172a;border:1px solid #334155;border-radius:14px;padding:20px;color:#e2e8f0}#account-panel input[type=text],#account-panel input[type=password]{background:#020617;border:1px solid #475569;border-radius:7px;padding:8px;color:white;width:100%}#account-panel label{font-size:13px}#account-panel .perm-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:9px;margin:12px 0}#account-panel .perm-item{background:#020617;border:1px solid #334155;border-radius:8px;padding:9px}#account-panel .user-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px;border-bottom:1px solid #334155;flex-wrap:wrap}#session-chip{display:flex;align-items:center;gap:8px;font-size:12px}#session-chip button{background:#334155;color:#fff;border-radius:7px;padding:6px 9px}#activity-panel{background:#0f172a;border:1px solid #334155;border-radius:14px;padding:20px;color:#e2e8f0}#activity-panel input,#activity-panel select{background:#020617;border:1px solid #475569;border-radius:7px;padding:8px;color:white}#activity-table{width:100%;border-collapse:collapse;font-size:13px}#activity-table th,#activity-table td{padding:9px;border-bottom:1px solid #334155;text-align:left;vertical-align:top}#activity-table th{color:#cbd5e1;background:#1e293b}#online-list .user-row{border-bottom:1px solid #334155;padding:9px 0}@media print{body *{visibility:hidden!important}#activity-panel,#activity-panel *{visibility:visible!important}#activity-panel{position:absolute;left:0;top:0;width:100%;background:white!important;color:black!important;border:0!important}#activity-panel button,#activity-panel .no-print{display:none!important}#activity-table th,#activity-table td{color:black!important;background:white!important;border:1px solid #aaa!important}#activity-panel h2,#activity-panel h3{color:black!important}}
+</style>
+<div id="auth-gate">
+ <form class="auth-card" id="login-form">
+  <div style="font-size:12px;color:#f87171;font-weight:700;letter-spacing:2px">DN BANGLA · SECURE WORKSPACE</div>
+  <h1 style="font-size:26px;font-weight:700;margin:8px 0 4px;color:white">লগইন করুন</h1>
+  <p class="muted" style="margin-bottom:20px">অ্যাডমিন অথবা অনুমোদিত রিপোর্টার অ্যাকাউন্ট ব্যবহার করুন।</p>
+  <label>ইউজারনেম অথবা অনুমোদিত ইমেইল<input id="auth-username" autocomplete="username" required placeholder="username অথবা name@gmail.com"></label>
+  <label style="display:block;margin-top:13px">পাসওয়ার্ড<input id="auth-password" type="password" autocomplete="current-password" required placeholder="Password"></label>
+  <p id="auth-error" style="display:none;color:#fca5a5;font-size:13px;margin-top:10px"></p>
+  <button type="submit" style="width:100%;margin-top:18px">লগইন</button>
+ </form>
+</div>
+<script>
+(function(){
+ const KEY='dnb_auth_users_v1';
+ const SESSION_KEY='dnb_auth_session_v1';
+ const modules=[['overview','ওভারভিউ ড্যাশবোর্ড'],['photocard','ফটোকার্ড জেনারেটর'],['texttrigger','টেক্সট / ট্রিগার ফটোকার্ড'],['admanager','বিজ্ঞাপন ম্যানেজার'],['schedule','শিডিউলার'],['staff','কর্মী আইডি কার্ড'],['integrations','WordPress / API ও সোশ্যাল ইন্টিগ্রেশন'],['logs','লাইভ সিস্টেম লগস'],['other','অন্যান্য মডিউল / টুলস']];
+ const defaultPerms=['overview','photocard','texttrigger'];
+ function readUsers(){try{return JSON.parse(localStorage.getItem(KEY)||'null')}catch(e){return null}}
+ function saveUsers(u){localStorage.setItem(KEY,JSON.stringify(u))}
+ let users=readUsers(); if(!Array.isArray(users)||!users.some(u=>u.role==='admin')){users=[{username:'admin',password:'adminipdnb',name:'Administrator',role:'admin',permissions:modules.map(([id])=>id)}];saveUsers(users)} else { let changed=false; users=users.map(u=>{if(u.role==='reporter'&&!Array.isArray(u.emails)){u.emails=u.email?[u.email]:[];changed=true} if(u.role==='admin'&&u.password==='DN@12345'){u.password='adminipdnb';changed=true} if(u.role==='admin'&&(!Array.isArray(u.permissions)||modules.some(([id])=>!u.permissions.includes(id))||u.permissions.length!==modules.length)){u.permissions=modules.map(([id])=>id);changed=true} if(u.role==='reporter'&&(!u.password||u.password==='')){u.password='posteditor';changed=true} return u}); if(changed)saveUsers(users); }
+ // Seed 100 reporter accounts using the requested @dnbangla.com.bd login IDs.
+ const seedReporterNames = ['ponir', 'abel', 'adam', 'adil', 'alan', 'alen', 'alex', 'alia', 'alif', 'amir', 'anik', 'arif', 'arya', 'asif', 'asma', 'ayan', 'azad', 'azim', 'babar', 'babu', 'bappy', 'basit', 'belal', 'bihan', 'bilal', 'biplob', 'bruce', 'brian', 'carlo', 'cathy', 'chris', 'clara', 'david', 'diana', 'dipu', 'emon', 'eric', 'eva', 'farah', 'farid', 'faisal', 'fahim', 'fardin', 'firoz', 'frank', 'gavin', 'george', 'habib', 'hadi', 'hamid', 'hasan', 'hossain', 'imran', 'irfan', 'ishaq', 'jack', 'jamil', 'jason', 'javed', 'john', 'joseph', 'joy', 'kabir', 'kamal', 'karim', 'kavin', 'khaled', 'laila', 'lamia', 'latif', 'leo', 'lina', 'mahdi', 'mahir', 'mamun', 'maruf', 'masud', 'mehedi', 'milon', 'mina', 'mithu', 'nadim', 'nahid', 'nabil', 'naeem', 'nasim', 'nehal', 'noman', 'omar', 'opal', 'osman', 'palash', 'parvez', 'rafi', 'rahim', 'rajib', 'rakib', 'rasel', 'rayhan', 'rehan'];
+ const seedDefaultPermissions = defaultPerms.slice();
+ {
+   const all = readUsers() || [];
+   let changed = false;
+   for (const name of seedReporterNames) {
+     const address = name + '@dnbangla.com.bd';
+     const emailOwner = all.find(u => (Array.isArray(u.emails) ? u.emails : []).some(e => String(e).toLowerCase() === address) || String(u.email || '').toLowerCase() === address);
+     const usernameOwner = all.find(u => String(u.username || '').toLowerCase() === name);
+     if (emailOwner) {
+       // Existing seeded account: preserve admin-edited permissions and password.
+       if (emailOwner.role === 'reporter' && !emailOwner.password) { emailOwner.password = 'posteditor'; changed = true; }
+       if (emailOwner.role === 'reporter' && Array.isArray(emailOwner.permissions) && emailOwner.permissions.length === 2 && emailOwner.permissions.includes('photocard') && emailOwner.permissions.includes('texttrigger')) { emailOwner.permissions = seedDefaultPermissions.slice(); changed = true; }
+       if (emailOwner.role === 'reporter' && !Array.isArray(emailOwner.permissions)) { emailOwner.permissions = seedDefaultPermissions.slice(); changed = true; }
+       continue;
+     }
+     if (usernameOwner) {
+       if (usernameOwner.role === 'reporter') {
+         const emails = Array.isArray(usernameOwner.emails) ? usernameOwner.emails.slice() : (usernameOwner.email ? [usernameOwner.email] : []);
+         if (!emails.some(e => String(e).toLowerCase() === address)) emails.push(address);
+         usernameOwner.emails = emails;
+         usernameOwner.email = emails[0] || address;
+         if (!usernameOwner.password) usernameOwner.password = 'posteditor';
+         if (!Array.isArray(usernameOwner.permissions)) usernameOwner.permissions = seedDefaultPermissions.slice();
+         changed = true;
+       }
+       continue;
+     }
+     all.push({username:name, name:name.charAt(0).toUpperCase()+name.slice(1), email:address, emails:[address], password:'posteditor', role:'reporter', permissions:seedDefaultPermissions.slice(), disabled:false});
+     changed = true;
+   }
+   if (changed) saveUsers(all);
+ }
+ let current=null;
+ const gate=document.getElementById('auth-gate');
+ const appEls=[document.querySelector('body > aside'),document.querySelector('body > main')];
+ // Keep the original dashboard intact; only cover it until a successful login.
+ function toastAuth(msg){const e=document.getElementById('auth-error');e.textContent=msg;e.style.display='block'}
+ function setupAccountUI(){
+   const nav=document.querySelector('body > aside nav'); if(!nav)return;
+   if(!document.getElementById('nav-users')){const b=document.createElement('button');b.id='nav-users';b.className='w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition text-slate-300 hover:bg-slate-800 text-left';b.innerHTML='<i class="fa-solid fa-users-gear w-5 text-center"></i> রিপোর্টার অ্যাকাউন্ট';b.onclick=()=>showAccounts();nav.appendChild(b)}
+   if(!document.getElementById('nav-activity')){const b=document.createElement('button');b.id='nav-activity';b.className='w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition text-slate-300 hover:bg-slate-800 text-left';b.innerHTML='<i class="fa-solid fa-clock-rotate-left w-5 text-center"></i> রিপোর্টার কার্যক্রম / ইতিহাস';b.onclick=()=>showActivity();nav.appendChild(b)}
+   const content=document.querySelector('body > main > div');
+   if(content&&!document.getElementById('account-panel')){const panel=document.createElement('section');panel.id='account-panel';panel.className='hidden space-y-5';panel.innerHTML=`<div><h2 style="font-size:22px;font-weight:700">রিপোর্টার অ্যাকাউন্ট ম্যানেজমেন্ট</h2><p style="color:#94a3b8;font-size:13px">১০০টি প্রি-সেট রিপোর্টারসহ অ্যাকাউন্ট দেখুন, অনুমোদিত ইমেইল ও মডিউল অনুমতি সম্পাদনা করুন। অ্যাডমিন সরাসরি ইউজারনেম/Gmail বদলাতে পারবেন; রিপোর্টারের অনুরোধ অনুমোদন করতে হবে।</p></div><form id="create-reporter-form" class="space-y-3"><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px"><label>রিপোর্টারের নাম<input id="rep-name" type="text" required placeholder="পূর্ণ নাম"></label><label>ইউজারনেম<input id="rep-user" type="text" required minlength="3" placeholder="username"></label><label>অনুমোদিত ইমেইল তালিকা (প্রতি লাইনে একটি)<textarea id="rep-emails" required rows="3" placeholder="name@gmail.com&#10;another@gmail.com" style="display:block;width:100%;margin-top:5px;background:#020617;border:1px solid #475569;border-radius:7px;padding:9px;color:white"></textarea><small style="color:#94a3b8">এই তালিকার যেকোনো অনুমোদিত ইমেইল বা ইউজারনেম ও পাসওয়ার্ড দিয়ে লগইন করা যাবে।</small></label><label>পাসওয়ার্ড<input id="rep-pass" type="password" required minlength="6" value="posteditor" placeholder="কমপক্ষে ৬ অক্ষর"></label></div><h3 style="font-weight:700;margin-top:15px">মডিউলভিত্তিক অনুমতি নির্বাচন</h3><p style="color:#94a3b8;font-size:12px;margin:5px 0 10px">প্রয়োজন অনুযায়ী এক বা একাধিক মডিউল টিক দিন। টিক না দেওয়া মডিউল রিপোর্টার ব্যবহার করতে পারবেন না।</p><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"><button type="button" class="auth-action" id="perm-select-all">সব নির্বাচন</button><button type="button" class="auth-action" id="perm-clear-all" style="background:#475569">সব বাতিল</button></div><div class="perm-grid" id="permission-choices"></div><button class="auth-action" type="submit">রিপোর্টার অ্যাকাউন্ট তৈরি করুন</button><p id="rep-status" style="font-size:13px;color:#86efac"></p></form><div><h3 style="font-weight:700;font-size:17px;margin-bottom:4px">বর্তমান অ্যাকাউন্ট / রিপোর্টার তালিকা</h3><p style="font-size:12px;color:#94a3b8;margin-bottom:8px">১০০টি প্রি-সেট রিপোর্টারের ডিফল্ট পাসওয়ার্ড: <b style="color:#fbbf24">posteditor</b>। প্রতিটি রিপোর্টারের অনুমতি আলাদাভাবে সম্পাদনা করা যাবে।</p><div id="account-list"></div></div><p style="font-size:12px;color:#fbbf24">গুরুত্বপূর্ণ: এটি একক HTML ফাইলের লোকাল লগইন। পাসওয়ার্ড/অনুমতি এই ব্রাউজারের Local Storage-এ থাকে; ওয়েবসাইটে প্রকাশ করলে এটি প্রকৃত সার্ভার-নিরাপত্তা নয়।</p>`;content.appendChild(panel);
+    if(!document.getElementById('activity-panel')){const ap=document.createElement('section');ap.id='activity-panel';ap.className='hidden space-y-5';ap.innerHTML=`<div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap"><div><h2 style="font-size:22px;font-weight:700">রিপোর্টার কার্যক্রম ও ইতিহাস</h2><p style="color:#94a3b8;font-size:13px">কে লগইন করেছেন, কোন মডিউল খুলেছেন এবং কোন বাটনে কাজ করেছেন—এই ব্রাউজারে সংরক্ষিত কার্যক্রম দেখুন।</p></div><div class="no-print" style="display:flex;gap:8px;flex-wrap:wrap"><button id="activity-refresh" class="auth-action" style="background:#334155">রিফ্রেশ</button><button id="activity-print" class="auth-action">প্রিন্ট / PDF</button><button id="activity-clear" class="auth-action" style="background:#475569">ইতিহাস মুছুন</button></div></div><div style="padding:14px;border:1px solid #334155;border-radius:10px"><h3 style="font-size:17px;font-weight:700;margin-bottom:8px">বর্তমানে অনলাইন</h3><p style="font-size:12px;color:#94a3b8;margin-bottom:8px">সর্বশেষ ৪৫ সেকেন্ডে সক্রিয় সেশন। একক HTML ফাইল হওয়ায় এই তালিকা একই ব্রাউজারের Local Storage-এ সীমাবদ্ধ; ভিন্ন ডিভাইস/কম্পিউটারের লাইভ অনলাইন স্ট্যাটাসের জন্য সার্ভার প্রয়োজন।</p><div id="online-list"></div></div><div class="no-print" style="display:flex;gap:8px;flex-wrap:wrap"><input id="activity-filter" placeholder="নাম বা ইউজারনেম দিয়ে খুঁজুন" style="min-width:200px"><select id="activity-kind"><option value="">সব কার্যক্রম</option><option>লগইন</option><option>লগআউট</option><option>মডিউল খোলা</option><option>বাটনে ক্লিক</option><option>অ্যাকাউন্ট তৈরি</option><option>অনুমতি পরিবর্তন</option><option>অ্যাকাউন্ট বন্ধ/চালু</option><option>অ্যাকাউন্ট মুছে ফেলা</option></select></div><div style="overflow:auto"><table id="activity-table"><thead><tr><th>তারিখ ও সময়</th><th>রিপোর্টার</th><th>লগইন Gmail</th><th>কার্যক্রম</th><th>মডিউল</th><th>বিস্তারিত</th></tr></thead><tbody id="activity-rows"></tbody></table></div><p id="activity-empty" style="display:none;color:#94a3b8;padding:14px">এখনো কোনো কার্যক্রমের ইতিহাস নেই।</p><p style="font-size:12px;color:#fbbf24">নোট: এই HTML-এ লগ/অনলাইন তথ্য ব্রাউজারভিত্তিক। ব্রাউজারের ডেটা মুছে গেলে বা অন্য ডিভাইসে খুললে তথ্য শেয়ার হবে না।</p>`;content.appendChild(ap);ap.querySelector('#activity-refresh').onclick=renderActivity;ap.querySelector('#activity-print').onclick=()=>window.print();ap.querySelector('#activity-clear').onclick=()=>{if(confirm('সব কার্যক্রমের ইতিহাস মুছে ফেলবেন?')){localStorage.removeItem(ACT_KEY);renderActivity()}};ap.querySelector('#activity-filter').addEventListener('input',renderActivity);ap.querySelector('#activity-kind').addEventListener('change',renderActivity)}
+    const choices=panel.querySelector('#permission-choices');modules.forEach(([id,label])=>{const d=document.createElement('label');d.className='perm-item';d.innerHTML=`<input type="checkbox" value="${id}" style="margin-right:8px;accent-color:#dc2626">${label}`;const cb=d.querySelector('input');cb.checked=defaultPerms.includes(id);choices.appendChild(d)});panel.querySelector('#perm-select-all').onclick=()=>choices.querySelectorAll('input').forEach(x=>x.checked=true);panel.querySelector('#perm-clear-all').onclick=()=>choices.querySelectorAll('input').forEach(x=>x.checked=false);
+    panel.querySelector('#create-reporter-form').addEventListener('submit',e=>{e.preventDefault();if(!current||current.role!=='admin')return;const username=panel.querySelector('#rep-user').value.trim();const password=panel.querySelector('#rep-pass').value;const name=panel.querySelector('#rep-name').value.trim();const emails=[...new Set((panel.querySelector('#rep-emails').value||'').split(/[\n,;]+/).map(x=>x.trim().toLowerCase()).filter(Boolean))];const email=emails[0]||'';const status=panel.querySelector('#rep-status');users=readUsers()||[];if(!emails.length||emails.some(x=>!/^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@(gmail\.com|dnbangla\.com\.bd)$/i.test(x))){status.style.color='#fca5a5';status.textContent='প্রতি লাইনে বৈধ @gmail.com অথবা @dnbangla.com.bd ঠিকানা দিন।';return}const usedEmails=users.flatMap(u=>[...(Array.isArray(u.emails)?u.emails:[]),u.email||'']).map(x=>x.toLowerCase());if(emails.some(x=>usedEmails.includes(x))){status.style.color='#fca5a5';status.textContent='তালিকার কোনো Gmail অন্য অ্যাকাউন্টে ব্যবহার করা হয়েছে।';return}if(users.some(u=>u.username.toLowerCase()===username.toLowerCase())){status.style.color='#fca5a5';status.textContent='এই ইউজারনেমটি আগে থেকেই আছে।';return}if(username.toLowerCase()==='admin'){status.style.color='#fca5a5';status.textContent='এই ইউজারনেম ব্যবহার করা যাবে না।';return}const permissions=[...choices.querySelectorAll('input:checked')].map(x=>x.value);users.push({username,email,emails,password,name,role:'reporter',permissions});saveUsers(users);logActivity('অ্যাকাউন্ট তৈরি','অ্যাকাউন্ট ম্যানেজমেন্ট','নতুন রিপোর্টার: '+username);e.target.reset();choices.querySelectorAll('input').forEach(x=>x.checked=defaultPerms.includes(x.value));status.style.color='#86efac';status.textContent='রিপোর্টার অ্যাকাউন্ট তৈরি হয়েছে।';renderAccounts()});
+   }
+ }
+ function setupProfileUI(){
+   const nav=document.querySelector('body > aside nav');
+   const content=document.querySelector('body > main > div');
+   if(!nav||!content)return;
+   if(!document.getElementById('nav-profile')){const b=document.createElement('button');b.id='nav-profile';b.className='w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition text-slate-300 hover:bg-slate-800 text-left';b.innerHTML='<i class="fa-solid fa-user-pen w-5 text-center"></i> আমার প্রোফাইল';b.onclick=showProfile;nav.appendChild(b)}
+   if(!document.getElementById('profile-panel')){const panel=document.createElement('section');panel.id='profile-panel';panel.className='hidden space-y-5';panel.style.cssText='background:#0f172a;border:1px solid #334155;border-radius:14px;padding:20px;color:#e2e8f0';panel.innerHTML=`<div><h2 style="font-size:22px;font-weight:700">আমার প্রোফাইল</h2><p style="color:#94a3b8;font-size:13px">নিজের নাম ও পাসওয়ার্ড এখানে পরিবর্তন করুন। ইউজারনেম/Gmail পরিবর্তন রিপোর্টারের ক্ষেত্রে অ্যাডমিন অনুমোদনের পর কার্যকর হবে।</p></div><div style="padding:12px;border:1px solid #334155;border-radius:10px;display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px"><div><div style="color:#94a3b8;font-size:12px">অ্যাকাউন্টের ধরন</div><b id="profile-role"></b></div><div><div style="color:#94a3b8;font-size:12px">বর্তমান নাম</div><b id="profile-current-name"></b></div><div><div style="color:#94a3b8;font-size:12px">বর্তমান ইউজারনেম</div><b id="profile-current-user"></b></div><div><div style="color:#94a3b8;font-size:12px">বর্তমান Gmail</div><b id="profile-current-email"></b></div><div style="grid-column:1/-1"><div style="color:#94a3b8;font-size:12px">মডিউল অনুমতি</div><b id="profile-permissions"></b></div><div><div style="color:#94a3b8;font-size:12px">অ্যাকাউন্ট স্ট্যাটাস</div><b id="profile-account-status"></b></div></div><form id="profile-form" class="space-y-3"><h3 style="font-weight:700;font-size:17px">ব্যক্তিগত তথ্য</h3><label style="display:block">আপনার নাম<input id="profile-new-name" type="text" required minlength="2" placeholder="পূর্ণ নাম" style="display:block;width:100%;margin-top:5px;background:#020617;border:1px solid #475569;border-radius:7px;padding:9px;color:white"></label><label style="display:block">ইউজারনেম<input id="profile-new-user" type="text" required minlength="3" placeholder="username" style="display:block;width:100%;margin-top:5px;background:#020617;border:1px solid #475569;border-radius:7px;padding:9px;color:white"></label><label style="display:block">Gmail ঠিকানা<input id="profile-new-email" type="email" placeholder="name@gmail.com" style="display:block;width:100%;margin-top:5px;background:#020617;border:1px solid #475569;border-radius:7px;padding:9px;color:white"></label><h3 style="font-weight:700;font-size:17px;padding-top:8px">পাসওয়ার্ড পরিবর্তন (ঐচ্ছিক)</h3><label style="display:block">বর্তমান পাসওয়ার্ড<input id="profile-current-password" type="password" autocomplete="current-password" placeholder="পাসওয়ার্ড বদলালে দিন" style="display:block;width:100%;margin-top:5px;background:#020617;border:1px solid #475569;border-radius:7px;padding:9px;color:white"></label><label style="display:block">নতুন পাসওয়ার্ড<input id="profile-new-password" type="password" minlength="6" autocomplete="new-password" placeholder="কমপক্ষে ৬ অক্ষর" style="display:block;width:100%;margin-top:5px;background:#020617;border:1px solid #475569;border-radius:7px;padding:9px;color:white"></label><label style="display:block">নতুন পাসওয়ার্ড আবার লিখুন<input id="profile-confirm-password" type="password" minlength="6" autocomplete="new-password" placeholder="নতুন পাসওয়ার্ড নিশ্চিত করুন" style="display:block;width:100%;margin-top:5px;background:#020617;border:1px solid #475569;border-radius:7px;padding:9px;color:white"></label><button class="auth-action" type="submit" id="profile-save-btn">পরিবর্তন সংরক্ষণ</button><p id="profile-status" style="font-size:13px;color:#86efac"></p></form><p style="font-size:12px;color:#fbbf24">আপনার পাসওয়ার্ড কখনো প্রোফাইলে প্রকাশ করা হবে না। পাসওয়ার্ড বদলাতে বর্তমান পাসওয়ার্ড দিতে হবে। রিপোর্টারের ইউজারনেম/Gmail পরিবর্তন অ্যাডমিন অনুমোদন না করা পর্যন্ত কার্যকর হবে না।</p>`;content.appendChild(panel);panel.querySelector('#profile-form').addEventListener('submit',submitProfileForm)}
+   if(current)renderProfile();
+ }
+ function showProfile(){if(!current)return;setupProfileUI();document.querySelectorAll('body > main > div > section').forEach(s=>s.classList.add('hidden'));document.getElementById('profile-panel').classList.remove('hidden');document.querySelectorAll('body > aside nav button').forEach(b=>b.classList.remove('active-nav'));document.getElementById('nav-profile').classList.add('active-nav');renderProfile()}
+ function renderProfile(){if(!current)return;const p=document.getElementById('profile-panel');if(!p)return;p.querySelector('#profile-role').textContent=current.role==='admin'?'অ্যাডমিন':'রিপোর্টার';p.querySelector('#profile-current-name').textContent=current.name||'নাম দেওয়া হয়নি';p.querySelector('#profile-current-user').textContent=current.username;p.querySelector('#profile-current-email').textContent=current.email||'Gmail দেওয়া হয়নি';p.querySelector('#profile-permissions').textContent=current.role==='admin'?'সকল মডিউলে অ্যাক্সেস':(current.permissions||[]).map(id=>(modules.find(x=>x[0]===id)||[id,id])[1]).join(', ')||'কোনো অনুমতি নেই';p.querySelector('#profile-account-status').textContent=current.disabled?'বন্ধ':'সক্রিয়';p.querySelector('#profile-new-name').value=current.name||'';p.querySelector('#profile-new-user').value=current.profileRequest?.username||current.username;p.querySelector('#profile-new-email').value=current.profileRequest?.email??(current.email||'');p.querySelector('#profile-current-password').value='';p.querySelector('#profile-new-password').value='';p.querySelector('#profile-confirm-password').value='';const status=p.querySelector('#profile-status');if(current.role==='reporter'&&current.profileRequest){status.style.color='#fbbf24';status.textContent='ইউজারনেম/Gmail পরিবর্তনের অনুরোধ অ্যাডমিন অনুমোদনের অপেক্ষায় আছে। নাম ও পাসওয়ার্ডের পরিবর্তন সরাসরি সেভ করা যাবে।'}else{status.textContent='';status.style.color='#86efac'}p.querySelector('#profile-save-btn').textContent=current.role==='admin'?'প্রোফাইল আপডেট করুন':(current.profileRequest?'প্রোফাইল আপডেট / অনুরোধ সংশোধন':'প্রোফাইল সংরক্ষণ ও প্রয়োজন হলে অনুমতির অনুরোধ')}
+ function submitProfileForm(e){e.preventDefault();if(!current)return;const p=document.getElementById('profile-panel');const name=p.querySelector('#profile-new-name').value.trim();const username=p.querySelector('#profile-new-user').value.trim();const email=p.querySelector('#profile-new-email').value.trim().toLowerCase();const oldPassword=p.querySelector('#profile-current-password').value;const newPassword=p.querySelector('#profile-new-password').value;const confirmPassword=p.querySelector('#profile-confirm-password').value;const status=p.querySelector('#profile-status');if(name.length<2){status.style.color='#fca5a5';status.textContent='নাম কমপক্ষে ২ অক্ষরের হতে হবে।';return}if(username.length<3){status.style.color='#fca5a5';status.textContent='ইউজারনেম কমপক্ষে ৩ অক্ষরের হতে হবে।';return}if(!validProfileEmail(email)||(current.role==='reporter'&&!email)){status.style.color='#fca5a5';status.textContent='রিপোর্টারের জন্য বৈধ @gmail.com অথবা @dnbangla.com.bd ঠিকানা আবশ্যক।';return}if(isProfileTaken(username,email,current.username)){status.style.color='#fca5a5';status.textContent='এই ইউজারনেম বা Gmail অন্য অ্যাকাউন্টে ব্যবহৃত হচ্ছে।';return}if(newPassword||confirmPassword){if(!oldPassword||oldPassword!==current.password){status.style.color='#fca5a5';status.textContent='পাসওয়ার্ড বদলাতে সঠিক বর্তমান পাসওয়ার্ড দিন।';return}if(newPassword.length<6){status.style.color='#fca5a5';status.textContent='নতুন পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে।';return}if(newPassword!==confirmPassword){status.style.color='#fca5a5';status.textContent='নতুন পাসওয়ার্ড দুটি মিলছে না।';return}}const all=readUsers()||[];const oldUsername=current.username;const target=all.find(x=>x.username===oldUsername);if(!target)return;const identityChanged=username.toLowerCase()!==target.username.toLowerCase()||email.toLowerCase()!==(target.email||'').toLowerCase();target.name=name;if(newPassword)target.password=newPassword;if(current.role==='admin'){const old=target.username;target.username=username;target.email=email;target.profileRequest=null;saveUsers(all);current=target;localStorage.setItem(SESSION_KEY,current.username);logActivity('প্রোফাইল পরিবর্তন','অ্যাডমিন প্রোফাইল','নাম/ইউজারনেম/Gmail/পাসওয়ার্ড আপডেট: '+old+' → '+username);status.style.color='#86efac';status.textContent='প্রোফাইলের তথ্য সফলভাবে আপডেট হয়েছে।';renderProfile();applyPermissions()}else{if(identityChanged){target.profileRequest={username,email,requestedAt:new Date().toISOString()};logActivity('প্রোফাইল পরিবর্তনের অনুরোধ','অ্যাকাউন্ট',username+(email?' / '+email:''))}saveUsers(all);current=target;logActivity('নিজের প্রোফাইল আপডেট','প্রোফাইল','নাম'+(newPassword?' ও পাসওয়ার্ড':'')+' আপডেট হয়েছে');status.style.color=identityChanged?'#fbbf24':'#86efac';status.textContent=identityChanged?'নাম/পাসওয়ার্ড সেভ হয়েছে। ইউজারনেম/Gmail পরিবর্তনের অনুরোধ অ্যাডমিন অনুমোদনের অপেক্ষায় আছে।':'নাম ও অন্যান্য তথ্য সফলভাবে আপডেট হয়েছে।';renderProfile();applyPermissions()}}
+ function validProfileEmail(email){return !email||/^[^\s@]+@(gmail\.com|dnbangla\.com\.bd)$/i.test(email)}
+ function isProfileTaken(username,email,except){return (readUsers()||[]).some(u=>(u.username!==except&&u.username.toLowerCase()===username.toLowerCase())||(!!email&&u.username!==except&&([...(Array.isArray(u.emails)?u.emails:[]),u.email||''].some(e=>e.toLowerCase()===email.toLowerCase()))))}
+ function adminEditAccount(u){if(!current||current.role!=='admin')return;const all=readUsers()||[];const target=all.find(x=>x.username===u.username);if(!target)return;const oldUsername=target.username;const nameInput=prompt('নতুন নাম লিখুন:',target.name||'');if(nameInput===null)return;const name=nameInput.trim();if(name.length<2){alert('নাম কমপক্ষে ২ অক্ষরের হতে হবে।');return}const userInput=prompt('নতুন ইউজারনেম লিখুন:',target.username);if(userInput===null)return;const username=userInput.trim();if(username.length<3){alert('ইউজারনেম কমপক্ষে ৩ অক্ষরের হতে হবে।');return}if(all.some(x=>x!==target&&x.username.toLowerCase()===username.toLowerCase())){alert('এই ইউজারনেম অন্য অ্যাকাউন্টে ব্যবহৃত হচ্ছে।');return}const oldEmails=Array.isArray(target.emails)&&target.emails.length?target.emails:[target.email||''];const mailInput=prompt('অনুমোদিত Gmail তালিকা লিখুন (প্রতি লাইনে একটি; ফাঁকা রাখা যাবে):',oldEmails.filter(Boolean).join('\n'));if(mailInput===null)return;const emails=[...new Set(mailInput.split(/[\n,;]+/).map(x=>x.trim().toLowerCase()).filter(Boolean))];if(target.role==='reporter'&&!emails.length){alert('রিপোর্টারের অন্তত একটি Gmail আবশ্যক।');return}if(emails.some(x=>!/^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@(gmail\.com|dnbangla\.com\.bd)$/i.test(x))){alert('প্রতিটি ঠিকানা @gmail.com অথবা @dnbangla.com.bd হতে হবে।');return}const taken=all.filter(x=>x!==target).flatMap(x=>[...(Array.isArray(x.emails)?x.emails:[]),x.email||'']).map(x=>x.toLowerCase());if(emails.some(x=>taken.includes(x))){alert('তালিকার কোনো Gmail অন্য অ্যাকাউন্টে ব্যবহৃত হচ্ছে।');return}const passInput=prompt('নতুন পাসওয়ার্ড লিখুন। অপরিবর্তিত রাখতে ফাঁকা রাখুন:', '');if(passInput===null)return;if(passInput&&passInput.length<6){alert('পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে।');return}target.name=name;target.username=username;target.emails=emails;target.email=emails[0]||'';if(passInput)target.password=passInput;target.profileRequest=null;saveUsers(all);if(current&&current.username===oldUsername){current=target;localStorage.setItem(SESSION_KEY,current.username)}logActivity('অ্যাকাউন্ট তথ্য পরিবর্তন','অ্যাকাউন্ট ম্যানেজমেন্ট',oldUsername+' → '+username+' (নাম/Gmail তালিকা/ইউজারনেম'+(passInput?'/পাসওয়ার্ড':'')+' আপডেট)');renderAccounts();if(current&&current.username===username)applyPermissions();alert('অ্যাকাউন্ট আপডেট হয়েছে। অনুমোদিত তালিকার যেকোনো Gmail অথবা ইউজারনেম এবং পাসওয়ার্ড দিয়ে লগইন করা যাবে।')}
+ function adminEditProfile(u){const next=prompt('নতুন ইউজারনেম লিখুন:',u.username);if(next===null)return;const username=next.trim();if(username.length<3){alert('ইউজারনেম কমপক্ষে ৩ অক্ষরের হতে হবে।');return}const mail=prompt('নতুন Gmail ঠিকানা লিখুন (ঐচ্ছিক):',u.email||'');if(mail===null)return;const email=mail.trim().toLowerCase();if(!validProfileEmail(email)||(u.role==='reporter'&&!email)){alert('রিপোর্টারের জন্য বৈধ @gmail.com অথবা @dnbangla.com.bd ঠিকানা আবশ্যক।');return}if(isProfileTaken(username,email,u.username)){alert('এই ইউজারনেম বা Gmail অন্য অ্যাকাউন্টে ব্যবহৃত হচ্ছে।');return}const all=readUsers()||[];const target=all.find(x=>x.username===u.username);if(!target)return;const old=target.username;target.username=username;target.email=email;target.profileRequest=null;saveUsers(all);if(current&&current.username===old)current=target;logActivity('প্রোফাইল পরিবর্তন','অ্যাকাউন্ট ম্যানেজমেন্ট',old+' → '+username+(email?' ('+email+')':''));renderAccounts();alert('ইউজারনেম/Gmail আপডেট হয়েছে।')}
+ function reporterProfileRequest(){if(!current||current.role!=='reporter')return;const next=prompt('নতুন ইউজারনেম লিখুন:',current.username);if(next===null)return;const username=next.trim();if(username.length<3){alert('ইউজারনেম কমপক্ষে ৩ অক্ষরের হতে হবে।');return}const mail=prompt('নতুন Gmail ঠিকানা লিখুন (ঐচ্ছিক):',current.email||'');if(mail===null)return;const email=mail.trim().toLowerCase();if(!validProfileEmail(email)){alert('শুধু বৈধ @gmail.com ঠিকানা দিন।');return}if(isProfileTaken(username,email,current.username)){alert('এই ইউজারনেম বা Gmail অন্য অ্যাকাউন্টে ব্যবহৃত হচ্ছে।');return}const all=readUsers()||[];const target=all.find(x=>x.username===current.username);if(!target)return;target.profileRequest={username,email,requestedAt:new Date().toISOString()};saveUsers(all);logActivity('প্রোফাইল পরিবর্তনের অনুরোধ','অ্যাকাউন্ট','অ্যাডমিন অনুমোদনের অপেক্ষায়: '+username+(email?' / '+email:''));alert('অনুরোধ অ্যাডমিনের কাছে পাঠানো হয়েছে। অনুমোদন না হওয়া পর্যন্ত বর্তমান তথ্য অপরিবর্তিত থাকবে।')}
+ function reviewProfileRequest(u,approve){const req=u.profileRequest;if(!req)return;const all=readUsers()||[];const target=all.find(x=>x.username===u.username);if(!target)return;if(approve){if(isProfileTaken(req.username,req.email,u.username)){alert('ইউজারনেম বা Gmail ইতিমধ্যে ব্যবহৃত হচ্ছে।');return}const old=target.username;target.username=req.username;target.email=req.email||'';target.profileRequest=null;saveUsers(all);logActivity('প্রোফাইল অনুরোধ অনুমোদন','অ্যাকাউন্ট ম্যানেজমেন্ট',old+' → '+target.username)}else{target.profileRequest=null;saveUsers(all);logActivity('প্রোফাইল অনুরোধ প্রত্যাখ্যান','অ্যাকাউন্ট ম্যানেজমেন্ট',target.username+'-এর অনুরোধ প্রত্যাখ্যান')}renderAccounts()}
+ function editGmailAndPermissions(u,row){if(!current||current.role!=='admin'||u.role==='admin')return;const old=row.querySelector('[data-gmail-perm-editor]');if(old){old.remove();return}const editor=document.createElement('div');editor.dataset.gmailPermEditor='true';editor.style.cssText='grid-column:1/-1;width:100%;margin-top:10px;padding:14px;border:1px solid #475569;border-radius:10px;background:#0b1220;box-sizing:border-box';editor.innerHTML='<label style="display:block;font-weight:700;margin-bottom:6px">অনুমোদিত Gmail তালিকা</label><textarea data-approved-gmails rows="4" placeholder="প্রতি লাইনে একটি Gmail" style="display:block;width:100%;box-sizing:border-box;background:#020617;border:1px solid #475569;border-radius:7px;padding:10px;color:white;margin-bottom:7px"></textarea><small style="display:block;color:#94a3b8;margin-bottom:12px">প্রতি লাইনে একটি Gmail লিখুন; কমা বা সেমিকোলনও ব্যবহার করা যাবে। সেভ হলে এই তালিকার যেকোনো Gmail দিয়ে লগইন করা যাবে।</small><div style="font-weight:700;margin-bottom:8px">মডিউলভিত্তিক অনুমতি</div><div data-module-permissions class="perm-grid"></div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button type="button" class="auth-action" data-save-all>Gmail ও অনুমতি সেভ করুন</button><button type="button" class="auth-action" data-cancel-all style="background:#475569">বাতিল</button></div><p data-save-status style="font-size:13px;margin-top:8px"></p>';const emailBox=editor.querySelector('[data-approved-gmails]');const existingEmails=Array.isArray(u.emails)&&u.emails.length?u.emails:[u.email||''];emailBox.value=existingEmails.filter(Boolean).join('\n');const grid=editor.querySelector('[data-module-permissions]');modules.forEach(([id,label])=>{const lab=document.createElement('label');lab.className='perm-item';const cb=document.createElement('input');cb.type='checkbox';cb.value=id;cb.checked=(u.permissions||[]).includes(id);cb.style.cssText='margin-right:8px;accent-color:#dc2626';lab.append(cb,document.createTextNode(label));grid.appendChild(lab)});editor.querySelector('[data-cancel-all]').onclick=()=>editor.remove();editor.querySelector('[data-save-all]').onclick=()=>{const status=editor.querySelector('[data-save-status]');const emails=[...new Set(emailBox.value.split(/[\n,;]+/).map(x=>x.trim().toLowerCase()).filter(Boolean))];const perms=[...grid.querySelectorAll('input:checked')].map(x=>x.value);if(!emails.length||emails.some(x=>!/^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@(gmail\.com|dnbangla\.com\.bd)$/i.test(x))){status.style.color='#fca5a5';status.textContent='অন্তত একটি বৈধ @gmail.com অথবা @dnbangla.com.bd ঠিকানা দিন।';return}if(!perms.length){status.style.color='#fca5a5';status.textContent='অন্তত একটি মডিউলের অনুমতি নির্বাচন করুন।';return}const all=readUsers()||[];const target=all.find(x=>x.username===u.username);if(!target){status.style.color='#fca5a5';status.textContent='অ্যাকাউন্ট পাওয়া যায়নি।';return}const taken=all.filter(x=>x.username!==target.username).flatMap(x=>[...(Array.isArray(x.emails)?x.emails:[]),x.email||'']).map(x=>String(x).toLowerCase());if(emails.some(x=>taken.includes(x))){status.style.color='#fca5a5';status.textContent='কোনো Gmail অন্য অ্যাকাউন্টে অনুমোদিত আছে।';return}const oldPerms=target.permissions||[];target.emails=emails;target.email=emails[0];target.permissions=perms;saveUsers(all);if(current&&current.username===target.username){current=target;applyPermissions()}logActivity('Gmail ও মডিউল অনুমতি সংরক্ষণ','অ্যাকাউন্ট ম্যানেজমেন্ট',target.username+' — Gmail: '+emails.join(', ')+' — মডিউল: '+perms.join(', '));renderAccounts();alert('অনুমোদিত Gmail ও মডিউলভিত্তিক অনুমতি সেভ হয়েছে।')};row.appendChild(editor);emailBox.focus()}
+ function renderAccounts(){const list=document.getElementById('account-list');if(!list)return;users=readUsers()||[];list.innerHTML='';users.forEach(u=>{const row=document.createElement('div');row.className='user-row';const info=document.createElement('div');info.innerHTML=`<b>${esc(u.name||u.username)}</b> <span style="color:#94a3b8;font-size:12px">@${esc(u.username)} · ${esc((Array.isArray(u.emails)&&u.emails.length?u.emails:[u.email||'']).filter(Boolean).join(', ')||'ইমেইল দেওয়া হয়নি')} · ${u.role==='admin'?'অ্যাডমিন':'রিপোর্টার'} · ${(u.permissions||[]).length}টি অনুমতি${u.role==='reporter'?' · পাসওয়ার্ড: '+esc(u.password||'posteditor'):''}</span>`;row.appendChild(info);const accountEdit=document.createElement('button');accountEdit.className='auth-action';accountEdit.style.marginRight='6px';accountEdit.textContent='নাম/Gmail/ইউজারনেম/পাসওয়ার্ড পরিবর্তন';accountEdit.onclick=()=>adminEditAccount(u);row.appendChild(accountEdit);if(u.role!=='admin'){const combinedEdit=document.createElement('button');combinedEdit.className='auth-action';combinedEdit.style.marginRight='6px';combinedEdit.textContent='Gmail ও মডিউল অনুমতি সেভ';combinedEdit.onclick=()=>editGmailAndPermissions(u,row);row.appendChild(combinedEdit);const actions=document.createElement('div');const profile=document.createElement('button');profile.className='auth-action';profile.style.marginRight='6px';profile.textContent='ইউজারনেম/Gmail পরিবর্তন';profile.onclick=()=>adminEditProfile(u);actions.appendChild(profile);if(u.profileRequest){const req=document.createElement('div');req.style.cssText='width:100%;margin-top:8px;padding:10px;border:1px solid #f59e0b;border-radius:8px;color:#fde68a';req.innerHTML=`<b>প্রোফাইল পরিবর্তনের অনুরোধ</b><div>নতুন ইউজারনেম: ${esc(u.profileRequest.username)}<br>নতুন Gmail: ${esc(u.profileRequest.email||'দেওয়া হয়নি')}</div>`;const yes=document.createElement('button');yes.className='auth-action';yes.textContent='অনুমোদন';yes.style.marginRight='6px';yes.onclick=()=>reviewProfileRequest(u,true);const no=document.createElement('button');no.className='auth-action';no.style.background='#475569';no.textContent='প্রত্যাখ্যান';no.onclick=()=>reviewProfileRequest(u,false);req.append(yes,no);row.appendChild(req)}const edit=document.createElement('button');edit.className='auth-action';edit.style.marginRight='6px';edit.textContent='অনুমতি সম্পাদনা';edit.onclick=()=>{const old=list.querySelector(`[data-perm-editor="${CSS.escape(u.username)}"]`);if(old){old.remove();return}const editor=document.createElement('div');editor.dataset.permEditor=u.username;editor.style.cssText='grid-column:1/-1;margin-top:10px;padding:12px;border:1px solid #334155;border-radius:10px';editor.innerHTML='<div class="perm-grid"></div><button type="button" class="auth-action" style="margin-top:10px">অনুমতি সংরক্ষণ</button>';const grid=editor.querySelector('.perm-grid');modules.forEach(([id,label])=>{const l=document.createElement('label');l.className='perm-item';l.innerHTML=`<input type="checkbox" value="${id}" ${(u.permissions||[]).includes(id)?'checked':''} style="margin-right:8px;accent-color:#dc2626">${label}`;grid.appendChild(l)});editor.querySelector('button').onclick=()=>{const perms=[...grid.querySelectorAll('input:checked')].map(x=>x.value);if(!perms.length){alert('অন্তত একটি মডিউলের অনুমতি নির্বাচন করুন।');return}const all=readUsers()||[];const target=all.find(x=>x.username===u.username);if(target){target.permissions=perms;saveUsers(all);logActivity('অনুমতি পরিবর্তন','অ্যাকাউন্ট ম্যানেজমেন্ট',target.username+' — '+perms.join(', '));if(current&&current.username===target.username)current=target;renderAccounts()}};row.appendChild(editor)};const toggle=document.createElement('button');toggle.className='auth-action';toggle.style.marginRight='6px';toggle.textContent=u.disabled?'চালু করুন':'বন্ধ করুন';toggle.onclick=()=>{u.disabled=!u.disabled;saveUsers(users);logActivity('অ্যাকাউন্ট বন্ধ/চালু','অ্যাকাউন্ট ম্যানেজমেন্ট',u.username+(u.disabled?' বন্ধ করা হয়েছে':' চালু করা হয়েছে'));renderAccounts()};const del=document.createElement('button');del.className='auth-action';del.style.background='#475569';del.textContent='মুছুন';del.onclick=()=>{if(confirm('এই রিপোর্টার অ্যাকাউন্ট মুছে ফেলবেন?')){users=users.filter(x=>x.username!==u.username);saveUsers(users);logActivity('অ্যাকাউন্ট মুছে ফেলা','অ্যাকাউন্ট ম্যানেজমেন্ট',u.username);renderAccounts()}};actions.append(edit,toggle,del);row.appendChild(actions)}list.appendChild(row)})}
+ function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+ function showAccounts(){if(!current||current.role!=='admin')return;document.querySelectorAll('body > main > div > section').forEach(s=>s.classList.add('hidden'));document.getElementById('account-panel').classList.remove('hidden');document.querySelectorAll('body > aside nav button').forEach(b=>b.classList.remove('active-nav'));document.getElementById('nav-users').classList.add('active-nav');renderAccounts()}
+ function showActivity(){if(!current||current.role!=='admin')return;document.querySelectorAll('body > main > div > section').forEach(s=>s.classList.add('hidden'));document.getElementById('activity-panel').classList.remove('hidden');document.querySelectorAll('body > aside nav button').forEach(b=>b.classList.remove('active-nav'));document.getElementById('nav-activity').classList.add('active-nav');renderActivity()}
+ const originalSwitch=window.switchTab;
+ window.switchTab=function(tab){if(!current)return;if(current.role==='reporter'&&!(current.permissions||[]).includes(tab)){alert('এই মডিউল ব্যবহারের অনুমতি আপনার নেই।');return}document.getElementById('account-panel')?.classList.add('hidden');document.getElementById('activity-panel')?.classList.add('hidden');document.getElementById('profile-panel')?.classList.add('hidden');originalSwitch(tab);logActivity('মডিউল খোলা',tab,(modules.find(x=>x[0]===tab)||[tab,tab])[1]);applyPermissions()};
+ function applyPermissions(){if(!current)return;modules.forEach(([id])=>{const nav=document.getElementById('nav-'+id);if(nav)nav.style.display=(current.role==='admin'||(current.permissions||[]).includes(id))?'':'none'});const usersNav=document.getElementById('nav-users');if(usersNav)usersNav.style.display=current.role==='admin'?'':'none';const activityNav=document.getElementById('nav-activity');if(activityNav)activityNav.style.display=current.role==='admin'?'':'none';document.getElementById('session-chip')?.remove();const header=document.querySelector('body > main header > div:last-child');if(header){const chip=document.createElement('div');chip.id='session-chip';chip.innerHTML=`<span style="color:#cbd5e1">${esc(current.name||current.username)} · ${current.role==='admin'?'অ্যাডমিন':'রিপোর্টার'}</span>${current.role==='reporter'?'<button id="profile-request-btn" style="background:#475569;color:#fff;border-radius:7px;padding:6px 9px">প্রোফাইল পরিবর্তনের অনুরোধ</button>':''}<button id="logout-btn">লগআউট</button>`;header.appendChild(chip);chip.querySelector('#logout-btn').onclick=logout;chip.querySelector('#profile-request-btn')?.addEventListener('click',reporterProfileRequest)}}
+ const ACT_KEY='dnb_activity_history_v1', PRES_KEY='dnb_presence_v1';let sessionToken=null,presenceTimer=null;
+ function logActivity(kind,module,detail){if(!current)return;try{const arr=JSON.parse(localStorage.getItem(ACT_KEY)||'[]');arr.unshift({at:new Date().toISOString(),username:current.username,name:current.name||current.username,role:current.role,loginEmail:current.loginEmail||localStorage.getItem('dnb_auth_login_email_v1')||'',kind,module,detail:String(detail||'').slice(0,220)});localStorage.setItem(ACT_KEY,JSON.stringify(arr.slice(0,3000)))}catch(e){console.warn('Activity log failed',e)}}
+ function startPresence(){sessionToken=current.username+'_'+Date.now()+'_'+Math.random().toString(36).slice(2);const beat=()=>{if(!current||!sessionToken)return;try{const a=JSON.parse(localStorage.getItem(PRES_KEY)||'[]').filter(x=>Date.now()-x.seen<120000&&x.token!==sessionToken);a.push({token:sessionToken,username:current.username,name:current.name||current.username,role:current.role,loginEmail:current.loginEmail||localStorage.getItem('dnb_auth_login_email_v1')||'',seen:Date.now()});localStorage.setItem(PRES_KEY,JSON.stringify(a))}catch(e){}};beat();presenceTimer=setInterval(beat,15000);window.addEventListener('beforeunload',stopPresence)}
+ function stopPresence(){if(presenceTimer)clearInterval(presenceTimer);presenceTimer=null;if(sessionToken){try{const a=JSON.parse(localStorage.getItem(PRES_KEY)||'[]').filter(x=>x.token!==sessionToken);localStorage.setItem(PRES_KEY,JSON.stringify(a))}catch(e){}}sessionToken=null}
+ function renderActivity(){if(!current||current.role!=='admin')return;const body=document.getElementById('activity-rows');if(!body)return;let arr=[];try{arr=JSON.parse(localStorage.getItem(ACT_KEY)||'[]')}catch(e){}const query=(document.getElementById('activity-filter')?.value||'').toLowerCase();const kind=document.getElementById('activity-kind')?.value||'';const filtered=arr.filter(x=>(!query||((x.name+' '+x.username+' '+x.detail).toLowerCase().includes(query)))&&(!kind||x.kind===kind));body.innerHTML=filtered.map(x=>`<tr><td>${esc(new Date(x.at).toLocaleString('bn-BD'))}</td><td>${esc(x.name)}<br><span style="color:#94a3b8">@${esc(x.username)}</span></td><td>${esc(x.loginEmail||x.email||'—')}</td><td>${esc(x.kind)}</td><td>${esc(x.module)}</td><td>${esc(x.detail||'—')}</td></tr>`).join('');document.getElementById('activity-empty').style.display=filtered.length?'none':'block';let online=[];try{online=JSON.parse(localStorage.getItem(PRES_KEY)||'[]').filter(x=>Date.now()-x.seen<45000)}catch(e){}const ol=document.getElementById('online-list');ol.innerHTML=online.length?online.map(x=>`<div class="user-row"><span><span style="color:#4ade80">●</span> <b>${esc(x.name)}</b> <span style="color:#94a3b8">@${esc(x.username)}</span><br><small style="color:#94a3b8">Gmail: ${esc(x.loginEmail||'—')}</small></span><span style="color:#94a3b8;font-size:12px">সর্বশেষ সক্রিয়: ${esc(new Date(x.seen).toLocaleTimeString('bn-BD'))}</span></div>`).join(''):'<p style="color:#94a3b8">এই ব্রাউজারে বর্তমানে কোনো সক্রিয় সেশন পাওয়া যায়নি।</p>'}
+ // Record module navigation and meaningful button actions without capturing passwords or field contents.
+ document.addEventListener('click',e=>{if(!current||current.role==='admin'&&document.getElementById('activity-panel')?.contains(e.target))return;const btn=e.target.closest('button');if(!btn)return;const label=(btn.innerText||btn.getAttribute('aria-label')||'বাটন').trim().replace(/\s+/g,' ').slice(0,100);if(!label||['লগআউট','রিপোর্টার অ্যাকাউন্ট','রিপোর্টার কার্যক্রম / ইতিহাস'].includes(label))return;const active=document.querySelector('body > main > div > section:not(.hidden)[id^="tab-"]');logActivity('বাটনে ক্লিক',active?active.id.replace('tab-',''):'ড্যাশবোর্ড',label)} ,true);
+  function logout(){if(current)logActivity('লগআউট','সেশন','ব্যবহারকারী লগআউট করেছেন');stopPresence();localStorage.removeItem(SESSION_KEY);localStorage.removeItem('dnb_auth_login_email_v1');current=null;gate.style.display='flex';document.getElementById('login-form').reset();document.getElementById('auth-error').style.display='none';document.getElementById('account-panel')?.classList.add('hidden');document.getElementById('profile-panel')?.classList.add('hidden');document.querySelectorAll('body > main > div > section[id^="tab-"]').forEach(s=>s.classList.add('hidden'));document.getElementById('tab-overview')?.classList.remove('hidden')}
+ document.getElementById('login-form').addEventListener('submit',e=>{e.preventDefault();users=readUsers()||[];const username=document.getElementById('auth-username').value.trim();const password=document.getElementById('auth-password').value;const found=users.find(u=>{const allowed=[...(Array.isArray(u.emails)?u.emails:[]),u.email||''].map(x=>x.toLowerCase());return (u.username.toLowerCase()===username.toLowerCase()||allowed.includes(username.toLowerCase()))&&u.password===password&&!u.disabled});if(!found){toastAuth('ইউজারনেম/Gmail অথবা পাসওয়ার্ড ভুল, অথবা অ্যাকাউন্ট বন্ধ আছে।');return}const enteredEmail=username.includes('@')?username.toLowerCase():'';current={...found,loginEmail:enteredEmail};localStorage.setItem(SESSION_KEY,current.username);localStorage.setItem('dnb_auth_login_email_v1',enteredEmail);gate.style.display='none';setupAccountUI();setupProfileUI();logActivity('লগইন','সেশন','লগইন আইডি: '+(enteredEmail||found.username));startPresence();applyPermissions();const first=(current.role==='admin'?'overview':(current.permissions||[])[0]);if(first)window.switchTab(first);else{alert('অ্যাডমিনকে অন্তত একটি মডিউলের অনুমতি দিতে বলুন।');logout()}});
+ // Keep both admin and reporter sessions active across refreshes until explicit logout.
+ function restoreSession(){
+   let saved='';try{saved=localStorage.getItem(SESSION_KEY)||''}catch(e){}
+   if(!saved)return;
+   users=readUsers()||[];
+   const found=users.find(u=>u.username===saved&&!u.disabled);
+   if(!found){localStorage.removeItem(SESSION_KEY);return}
+   current={...found,loginEmail:localStorage.getItem('dnb_auth_login_email_v1')||found.email||''};gate.style.display='none';setupAccountUI();setupProfileUI();applyPermissions();startPresence();
+   const first=(current.role==='admin'?'overview':(current.permissions||[])[0]);
+   if(first)window.switchTab(first);
+ }
+ restoreSession();
+ // Hide dashboard behind the login gate from the initial render.
+ document.addEventListener('DOMContentLoaded',()=>{setupAccountUI();setupProfileUI();document.getElementById('tab-overview')?.classList.add('hidden')});
+})();
+</script>
+
+<style>
+/* Accessible show/hide controls for every password field, including dynamically created profile forms. */
+.password-eye-wrap{position:relative!important;display:block!important;width:100%!important;}
+.password-eye-wrap>input[type="password"],.password-eye-wrap>input[type="text"]{box-sizing:border-box!important;padding-right:44px!important;}
+.password-eye-toggle{position:absolute!important;right:5px!important;top:50%!important;transform:translateY(-50%)!important;width:34px!important;height:34px!important;display:flex!important;align-items:center!important;justify-content:center!important;border:0!important;background:transparent!important;color:#94a3b8!important;border-radius:6px!important;cursor:pointer!important;padding:5px!important;z-index:5!important;}
+.password-eye-toggle:hover{color:#e2e8f0!important;background:rgba(148,163,184,.12)!important}
+.password-eye-toggle:focus-visible{outline:2px solid #60a5fa!important;outline-offset:1px!important}
+.password-eye-toggle svg{width:20px;height:20px;display:block;pointer-events:none}
+</style>
+<script>
+(function(){
+ const eyeOpen='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>';
+ const eyeClosed='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 10.6a2 2 0 0 0 2.8 2.8"/><path d="M9.9 5.2A10.8 10.8 0 0 1 12 5c6.4 0 10 7 10 7a15.7 15.7 0 0 1-3.1 3.9M6.2 6.2C3.5 8 2 12 2 12s3.6 7 10 7a10.5 10.5 0 0 0 4.1-.8"/></svg>';
+ function addEye(input){
+   if(!input || input.dataset.eyeReady==='1' || input.type!=='password')return;
+   if(input.id==='') input.id='password-field-'+Math.random().toString(36).slice(2,10);
+   const parent=input.parentElement;
+   if(!parent)return;
+   const wrap=document.createElement('span');wrap.className='password-eye-wrap';
+   parent.insertBefore(wrap,input);wrap.appendChild(input);
+   const btn=document.createElement('button');btn.type='button';btn.className='password-eye-toggle';btn.innerHTML=eyeClosed;btn.setAttribute('aria-label','পাসওয়ার্ড দেখান');btn.setAttribute('title','পাসওয়ার্ড দেখান');btn.setAttribute('aria-controls',input.id);
+   btn.addEventListener('click',function(){const reveal=input.type==='password';input.type=reveal?'text':'password';btn.innerHTML=reveal?eyeOpen:eyeClosed;btn.setAttribute('aria-label',reveal?'পাসওয়ার্ড লুকান':'পাসওয়ার্ড দেখান');btn.setAttribute('title',reveal?'পাসওয়ার্ড লুকান':'পাসওয়ার্ড দেখান');input.focus({preventScroll:true});});
+   wrap.appendChild(btn);input.dataset.eyeReady='1';
+ }
+ function scan(root){if(root.matches&&root.matches('input[type="password"]'))addEye(root);if(root.querySelectorAll)root.querySelectorAll('input[type="password"]').forEach(addEye)}
+ function init(){scan(document);const observer=new MutationObserver(records=>records.forEach(rec=>rec.addedNodes.forEach(node=>{if(node.nodeType===1)scan(node)})));observer.observe(document.documentElement,{childList:true,subtree:true});}
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
+})();
+</script>
+
 </body>
 </html>
