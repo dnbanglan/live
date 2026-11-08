@@ -408,6 +408,7 @@
                   <i class="fa-solid fa-heading mr-1"></i> শিরোনাম / মূল হেডিং (১১৬৫px - ১৫৬৩px = ৩৯৮px):
                 </label>
                 <textarea id="input-headline" rows="3" oninput="drawCanvas()" class="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-sm text-white text-center focus:outline-none focus:border-red-500">বাংলাদেশে নতুন ডিজিটাল অটোমেশন ও ফটোকার্ড সিস্টেম চালু হয়েছে</textarea>
+                <p class="text-[10px] text-emerald-300 leading-relaxed"><i class="fa-solid fa-wand-magic-sparkles mr-1"></i> ডিফল্ট অটো: শব্দের দৈর্ঘ্য ও লেখার প্রস্থ অনুযায়ী হেডলাইন সুষমভাবে ২ লাইনে সাজবে। এক শব্দের শিরোনাম এক লাইনেই থাকবে।</p>
 
                 <div class="space-y-3 pt-2 border-t border-slate-800">
                   <div>
@@ -419,11 +420,20 @@
                   </div>
 
                   <div>
-                    <div class="flex justify-between text-xs text-slate-300 mb-1">
-                      <span>ডানে-বামে মার্জিন (অটো ১/২/৩ লাইন):</span>
-                      <span id="margin-val" class="font-bold text-amber-400">120px</span>
+                    <div class="flex flex-wrap justify-between items-center gap-2 text-xs text-slate-300 mb-1">
+                      <label for="input-margin">হেডলাইন লাইনের প্রস্থ (মাঝখান থেকে দুই পাশে):</label>
+                      <span id="margin-val" class="font-bold text-amber-400" aria-live="polite">1420px · দুই পাশে 250px</span>
                     </div>
-                    <input type="range" id="input-margin" min="40" max="450" value="250" oninput="drawCanvas()" class="w-full accent-red-600">
+                    <input type="range" id="input-margin" min="600" max="1840" step="10" value="1420" oninput="drawCanvas()" aria-label="হেডলাইন লাইনের প্রস্থ নিয়ন্ত্রণ; দুই পাশের মার্জিন সমান থাকবে" class="w-full accent-red-600">
+                    <div class="flex items-center justify-between gap-2 mt-1">
+                      <span class="text-[10px] text-slate-500">সংকুচিত</span>
+                      <span class="text-[10px] text-slate-400 text-center">বাম ও ডান মার্জিন সমানভাবে বদলাবে</span>
+                      <span class="text-[10px] text-slate-500">প্রসারিত</span>
+                    </div>
+                    <div class="flex items-center justify-between gap-2 mt-2">
+                      <p class="text-[10px] text-slate-500 leading-relaxed">সর্বোচ্চ ১৮৪০px; ক্যানভাসের দুই পাশে অন্তত ৪০px নিরাপদ মার্জিন থাকবে।</p>
+                      <button type="button" onclick="resetHeadlineWidth()" class="shrink-0 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded text-[10px] text-slate-200">ডিফল্ট</button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -2237,6 +2247,14 @@ let defaultAds = [
       }
     }
 
+    // Restore the headline to its default centred width (1420px / 250px side margins).
+    function resetHeadlineWidth() {
+      const control = document.getElementById('input-margin');
+      if (!control) return;
+      control.value = '1420';
+      drawCanvas();
+    }
+
     // ==================== 1920x1920 CANVAS DRAWING ENGINE ====================
     function drawCanvas() {
       const canvas = document.getElementById('photocardCanvas');
@@ -2348,39 +2366,52 @@ let defaultAds = [
       ctx.fillStyle = bottomBgColor;
       ctx.fillRect(0, headlineYStart, width, headlineH);
 
+      const headline = document.getElementById('input-headline').value;
+      let fontSize = parseInt(document.getElementById('input-fontsize').value, 10) || 90;
+
+      // Slider controls the headline's maximum line width around the canvas centre.
+      // Clamp the value so the headline always keeps a 40px safe margin on both sides.
+      const widthControl = document.getElementById('input-margin');
+      const requestedLineWidth = Number(widthControl.value) || 1420;
+      const maxWidth = Math.max(600, Math.min(width - 80, requestedLineWidth));
+      const sideMargin = (width - maxWidth) / 2;
+
+      // Restrict drawing to the selected headline column, not merely the full canvas.
       ctx.save();
       ctx.beginPath();
-      ctx.rect(0, headlineYStart, width, headlineH);
+      ctx.rect(sideMargin, headlineYStart, maxWidth, headlineH);
       ctx.clip();
-
-      const headline = document.getElementById('input-headline').value;
-      let fontSize = parseInt(document.getElementById('input-fontsize').value);
-      const sideMargin = parseInt(document.getElementById('input-margin').value);
-      const maxWidth = width - (sideMargin * 2);
 
       ctx.fillStyle = headlineTextColor;
       ctx.textAlign = 'center';
       ctx.font = `bold ${fontSize}px "Hind Siliguri", sans-serif`;
 
-      let lines = wrapText(ctx, headline, maxWidth);
+      // Automatically arrange multi-word headlines into two visually balanced lines.
+      // The split is recalculated at every font size so both lines fit the selected width.
+      let lines = wrapHeadlineIntoTwoBalancedLines(ctx, headline, maxWidth);
 
-      while ((lines.length * (fontSize * 1.35)) > (headlineH - 20) && fontSize > 18) {
-        fontSize -= 2;
+      while (
+        (lines.length * (fontSize * 1.35)) > (headlineH - 20) ||
+        lines.some(line => ctx.measureText(line).width > maxWidth)
+      ) {
+        if (fontSize <= 18) break;
+        fontSize = Math.max(18, fontSize - 2);
         ctx.font = `bold ${fontSize}px "Hind Siliguri", sans-serif`;
-        lines = wrapText(ctx, headline, maxWidth);
+        lines = wrapHeadlineIntoTwoBalancedLines(ctx, headline, maxWidth);
       }
 
       const lineGap = fontSize * 1.35;
       const totalTextHeight = lines.length * lineGap;
-      let startY = headlineYStart + (headlineH - totalTextHeight) / 2 + (fontSize * 0.85);
+      const startY = headlineYStart + (headlineH - totalTextHeight) / 2 + (fontSize * 0.85);
 
       lines.forEach((line, index) => {
-        ctx.fillText(line, width / 2, startY + (index * lineGap));
+        // maxWidth is a second safeguard for unusually wide graphemes or browser font metrics.
+        ctx.fillText(line, width / 2, startY + (index * lineGap), maxWidth);
       });
       ctx.restore();
 
       document.getElementById('fontsize-val').textContent = fontSize + 'px';
-      document.getElementById('margin-val').textContent = sideMargin + 'px';
+      document.getElementById('margin-val').textContent = `${Math.round(maxWidth)}px · দুই পাশে ${Math.round(sideMargin)}px`;
 
       // 4. SOCIAL & WEBSITE LINK BAR (1563px to 1640px)
       const socialBarY = 1563;
@@ -2442,6 +2473,53 @@ let defaultAds = [
         ctx.fillStyle = '#800000';
         ctx.fillRect(0, adY, width, adH);
       }
+    }
+
+    // Two-line automatic headline formatter. It tests every possible word boundary,
+    // prefers similarly sized lines, discourages awkward grammatical breaks,
+    // and never drops or reorders any word.
+    function wrapHeadlineIntoTwoBalancedLines(ctx, text, maxWidth) {
+      const normalized = String(text ?? '')
+        .replace(/[\r\n]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (!normalized) return [''];
+
+      const words = normalized.split(' ').filter(Boolean);
+      if (words.length <= 1) return [normalized];
+
+      const avoidLineEnd = new Set(['ও', 'এবং', 'কিন্তু', 'তবে', 'অথবা', 'যদি', 'যে', 'যা']);
+      const avoidLineStart = new Set(['ও', 'এবং', 'কিন্তু', 'তবে', 'অথবা', 'যে', 'যা', 'জন্য', 'থেকে', 'পর্যন্ত', 'এর', 'এই', 'সেই']);
+      let bestLines = [words.slice(0, 1).join(' '), words.slice(1).join(' ')];
+      let bestScore = Infinity;
+
+      for (let splitAt = 1; splitAt < words.length; splitAt++) {
+        const firstLine = words.slice(0, splitAt).join(' ');
+        const secondLine = words.slice(splitAt).join(' ');
+        const firstWidth = ctx.measureText(firstLine).width;
+        const secondWidth = ctx.measureText(secondLine).width;
+        const overflow = Math.max(0, firstWidth - maxWidth) + Math.max(0, secondWidth - maxWidth);
+        const widthImbalance = Math.abs(firstWidth - secondWidth);
+        const wordImbalance = Math.abs(splitAt - (words.length - splitAt));
+
+        // Fitting both lines is the first priority; visual width balance is the next.
+        let score = (overflow * 100) + widthImbalance + (wordImbalance * maxWidth * 0.035);
+
+        const lastWord = words[splitAt - 1].replace(/[.,!?;:।]+$/u, '');
+        const firstWordNextLine = words[splitAt].replace(/^[“"'‘(]+/u, '');
+        if (avoidLineEnd.has(lastWord)) score += maxWidth * 0.65;
+        if (avoidLineStart.has(firstWordNextLine)) score += maxWidth * 0.65;
+
+        // A natural pause mark makes a balanced line break slightly preferable.
+        if (/[,:;—–।-]$/u.test(words[splitAt - 1])) score -= maxWidth * 0.045;
+
+        if (score < bestScore) {
+          bestScore = score;
+          bestLines = [firstLine, secondLine];
+        }
+      }
+
+      return bestLines;
     }
 
     function wrapText(ctx, text, maxWidth) {
